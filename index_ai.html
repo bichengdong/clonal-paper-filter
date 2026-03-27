@@ -359,9 +359,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
         <div class="sh">&#x2699;&#xFE0F; 系统设置</div>
         <div class="sets">
           <h3>&#x2601;&#xFE0F; 数据同步（GitHub Gist）</h3>
-          <div class="gi-box">评审数据通过 <strong>GitHub Gist</strong> 在所有评审员间实时共享。每次决策自动同步，每30秒自动拉取最新数据。<br>当前 Gist ID: <code id="cur-gist-id">—</code></div>
+          <div class="gi-box">评审数据通过 <strong>GitHub Gist</strong> 在所有评审员间共享。每次决策自动同步至云端，其他评审员30秒内可见。<br>
+            ⚠️ <strong>注意</strong>：中国大陆网络访问 GitHub API 可能不稳定。同步失败时评审数据仍会<strong>保存在本地</strong>，网络恢复后可点击「强制同步」上传。<br>
+            当前 Gist ID: <code id="cur-gist-id">—</code></div>
           <div class="fr"><label>Gist ID</label><input type="text" id="set-gid" placeholder="32位 Gist ID"></div>
-          <div class="fr"><label>GitHub Token（gist 权限）</label><input type="password" id="set-gtk" placeholder="ghp_xxxx" autocomplete="off"><div class="fh">仅保存在本地浏览器</div></div>
+          <div class="fr"><label>GitHub Token（gist 权限）</label><input type="password" id="set-gtk" placeholder="ghp_xxxx" autocomplete="off"><div class="fh">Token 仅保存在本地浏览器，不会上传至任何第三方</div></div>
           <div class="ast"><div class="sdot" id="gdot"></div><span id="gst-txt">未配置</span></div><br>
           <button class="sbtn" id="save-gist">保存并测试连接</button>
           <button class="sbtn" style="margin-left:8px;background:linear-gradient(135deg,#10b981,#059669)" id="force-sync">&#x1F504; 强制同步</button>
@@ -461,11 +463,12 @@ async function gistRead() {
   const id = S.gistCfg.id || GIST_ID, tok = S.gistCfg.token || GIST_TOKEN;
   if (!id) return null;
   setSS('yellow','同步中…');
+  let isTimeout = false;
   try {
     const h = {'Cache-Control':'no-cache'};
     if (tok) h['Authorization'] = 'token '+tok;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15000);
+    const timer = setTimeout(() => { isTimeout=true; controller.abort(); }, 15000);
     const r = await fetch('https://api.github.com/gists/'+id, {headers:h, signal:controller.signal});
     clearTimeout(timer);
     if (!r.ok) throw new Error('HTTP '+r.status);
@@ -474,19 +477,27 @@ async function gistRead() {
     setSS('green','已同步 '+new Date().toLocaleTimeString());
     return JSON.parse(f.content||'{}');
   } catch(e) {
-    if (e.name === 'AbortError') setSS('yellow','同步超时（离线模式）');
-    else setSS('red','同步失败: '+e.message);
+    if (isTimeout || e.name==='AbortError') {
+      setSS('yellow','⚠️ 网络超时（已进入离线模式，本地数据正常使用）');
+    } else if (e.message.includes('401')) {
+      setSS('red','❌ Token无效，请在设置中更新');
+    } else if (e.message.includes('404')) {
+      setSS('red','❌ Gist ID不存在，请在设置中检查');
+    } else {
+      setSS('yellow','⚠️ GitHub不可达（离线模式）');
+    }
     return null;
   }
 }
 
 async function gistWrite(data) {
   const id = S.gistCfg.id || GIST_ID, tok = S.gistCfg.token || GIST_TOKEN;
-  if (!id || !tok) { setSS('yellow','未配置Token，数据仅本地保存'); return false; }
-  setSS('yellow','保存中…');
+  if (!id || !tok) { setSS('yellow','数据已本地保存（未配置Token）'); return false; }
+  setSS('yellow','云端保存中…');
+  let isTimeout = false;
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 8000);
+    const timer = setTimeout(() => { isTimeout=true; controller.abort(); }, 12000);
     const r = await fetch('https://api.github.com/gists/'+id, {
       method:'PATCH',
       headers:{'Authorization':'token '+tok,'Content-Type':'application/json'},
@@ -495,11 +506,11 @@ async function gistWrite(data) {
     });
     clearTimeout(timer);
     if (!r.ok) throw new Error('HTTP '+r.status);
-    setSS('green','已保存 '+new Date().toLocaleTimeString());
+    setSS('green','✅ 已同步至云端 '+new Date().toLocaleTimeString());
     return true;
   } catch(e) {
-    if (e.name === 'AbortError') setSS('yellow','保存超时（数据已本地保存）');
-    else setSS('red','保存失败: '+e.message);
+    if (isTimeout || e.name==='AbortError') setSS('yellow','⚠️ 网络超时，数据已本地保存');
+    else setSS('yellow','⚠️ 云端保存失败，数据已本地保存');
     return false;
   }
 }
@@ -1029,9 +1040,18 @@ document.getElementById('save-gist').onclick=async()=>{
   S.gistCfg.id=document.getElementById('set-gid').value.trim();
   S.gistCfg.token=document.getElementById('set-gtk').value.trim();
   localStorage.setItem('cr_g',JSON.stringify(S.gistCfg));
-  updGistDot(); toast('Gist配置已保存，测试中…','info');
+  updGistDot(); toast('配置已保存，正在测试连接（最长15秒）…','info');
   const r=await gistRead();
-  toast(r!==null?'✅ 连接成功':'❌ 连接失败，请检查 ID 和 Token',r!==null?'success':'error');
+  if (r!==null) {
+    toast('✅ 连接成功！数据已同步','success');
+  } else {
+    const sdotClass = document.getElementById('sdot').className;
+    if (sdotClass.includes('yellow')) {
+      toast('⚠️ 网络超时。配置已保存，同步将在网络恢复后自动重试','info');
+    } else {
+      toast('❌ 连接失败：Token或ID有误，请检查后重试','error');
+    }
+  }
 };
 
 document.getElementById('force-sync').onclick=async()=>{await syncPull();toast('数据已从云端同步','success');};
