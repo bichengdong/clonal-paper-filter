@@ -463,29 +463,44 @@ async function gistRead() {
   try {
     const h = {'Cache-Control':'no-cache'};
     if (tok) h['Authorization'] = 'token '+tok;
-    const r = await fetch('https://api.github.com/gists/'+id, {headers:h});
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    const r = await fetch('https://api.github.com/gists/'+id, {headers:h, signal:controller.signal});
+    clearTimeout(timer);
     if (!r.ok) throw new Error('HTTP '+r.status);
     const d = await r.json(), f = d.files[GIST_FILE];
     if (!f) return {};
     setSS('green','已同步 '+new Date().toLocaleTimeString());
     return JSON.parse(f.content||'{}');
-  } catch(e) { setSS('red','同步失败: '+e.message); return null; }
+  } catch(e) {
+    if (e.name === 'AbortError') setSS('yellow','同步超时（离线模式）');
+    else setSS('red','同步失败: '+e.message);
+    return null;
+  }
 }
 
 async function gistWrite(data) {
   const id = S.gistCfg.id || GIST_ID, tok = S.gistCfg.token || GIST_TOKEN;
-  if (!id || !tok) return false;
+  if (!id || !tok) { setSS('yellow','未配置Token，数据仅本地保存'); return false; }
   setSS('yellow','保存中…');
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
     const r = await fetch('https://api.github.com/gists/'+id, {
       method:'PATCH',
       headers:{'Authorization':'token '+tok,'Content-Type':'application/json'},
-      body:JSON.stringify({files:{[GIST_FILE]:{content:JSON.stringify(data,null,2)}}})
+      body:JSON.stringify({files:{[GIST_FILE]:{content:JSON.stringify(data,null,2)}}}),
+      signal: controller.signal
     });
+    clearTimeout(timer);
     if (!r.ok) throw new Error('HTTP '+r.status);
     setSS('green','已保存 '+new Date().toLocaleTimeString());
     return true;
-  } catch(e) { setSS('red','保存失败: '+e.message); return false; }
+  } catch(e) {
+    if (e.name === 'AbortError') setSS('yellow','保存超时（数据已本地保存）');
+    else setSS('red','保存失败: '+e.message);
+    return false;
+  }
 }
 
 function setSS(c,t) {
@@ -590,14 +605,19 @@ async function loadStats() {
 
 async function loadPapers(pg, type) {
   if (type) S.confType=type;
-  document.getElementById('plist').innerHTML='<div class="empty"><div class="ei"><span class="spin"></span></div></div>';
+  document.getElementById('plist').innerHTML='<div class="empty"><div class="ei"><span class="spin"></span></div><p style="margin-top:8px;font-size:12px">加载文献中…</p></div>';
   try {
-    const r=await fetch('data/'+S.confType+'_'+pg+'.json');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    const r = await fetch('data/'+S.confType+'_'+pg+'.json', {signal:controller.signal});
+    clearTimeout(timer);
+    if (!r.ok) throw new Error('HTTP '+r.status);
     const d=await r.json();
     S.page=pg; S.totalPages=d.total_pages; S.papers=d.papers;
     renderPapers(); updatePager();
   } catch(e) {
-    document.getElementById('plist').innerHTML='<div class="empty"><div class="ei">⚠️</div><p>加载失败</p></div>';
+    const msg = e.name==='AbortError' ? '加载超时，请检查网络连接' : ('加载失败: '+e.message);
+    document.getElementById('plist').innerHTML='<div class="empty"><div class="ei">⚠️</div><p>'+msg+'</p><p style="margin-top:8px;font-size:11px;color:#9ca3af">请刷新页面重试</p></div>';
   }
 }
 
