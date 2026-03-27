@@ -1,9 +1,7 @@
-const GIST_ID     = '19f651ea4521a63cebb47ff00b24afe1';
-const GIST_TOKEN  = '';
-const GIST_FILE   = 'clonal_review_data.json';
+const SERVER_API  = 'https://bichengdong.net/api';
 const DEFAULT_PWD = 'clonal2024';
 const ADMIN_PWD   = 'admin2024';
-const API_URLS    = {
+const AI_URLS     = {
   deepseek: 'https://api.deepseek.com/v1/chat/completions',
   openai:   'https://api.openai.com/v1/chat/completions'
 };
@@ -13,67 +11,78 @@ const S = {
   papers: [], allDecisions: {}, reviewers: [],
   criteria: {inclusion:'', exclusion:''},
   aiCfg: {provider:'deepseek', apiKey:'', baseURL:'', model:'deepseek-chat'},
-  gistCfg: {id:'', token:''},
   filter:'all', search:'', page:1, totalPages:1, confType:'high',
   selected: new Set(), did: null,
   totalStats: {total:0, high:0, medium:0}
 };
 
-const getPwd  = () => localStorage.getItem('cr_pwd')  || DEFAULT_PWD;
+const getPwd      = () => localStorage.getItem('cr_pwd')  || DEFAULT_PWD;
 const getAdminPwd = () => localStorage.getItem('cr_apwd') || ADMIN_PWD;
+const getAuthKey  = () => S.user.isAdmin ? getAdminPwd() : getPwd();
 
-/* ── GIST SYNC ── */
-async function gistRead() {
-  const id = S.gistCfg.id || GIST_ID;
-  if (!id) return null;
-  setSS('yellow','同步中…');
-  let isTimeout = false;
+/* ── SERVER SYNC ── */
+async function apiCall(method, path, body, timeout=15000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => { isTimeout=true; controller.abort(); }, 15000);
-    const r = await fetch('https://api.github.com/gists/'+id, {
-      headers: {'Cache-Control':'no-cache'},
+    const opts = {
+      method,
+      headers: {'Content-Type':'application/json', 'X-Auth-Key': getAuthKey()},
       signal: controller.signal
-    });
+    };
+    if (body) opts.body = JSON.stringify(body);
+    const r = await fetch(SERVER_API + path, opts);
     clearTimeout(timer);
-    if (!r.ok) throw new Error('HTTP '+r.status);
-    const d = await r.json(), f = d.files[GIST_FILE];
-    if (!f) return {};
-    setSS('green','已同步 '+new Date().toLocaleTimeString());
-    return JSON.parse(f.content||'{}');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return await r.json();
   } catch(e) {
-    if (isTimeout || e.name==='AbortError') setSS('yellow','⚠️ 网络超时（离线模式）');
-    else if (e.message.includes('404'))     setSS('red','❌ Gist不存在');
-    else                                    setSS('yellow','⚠️ GitHub不可达（离线模式）');
-    return null;
+    clearTimeout(timer);
+    throw e;
   }
 }
 
-async function gistWrite(data) {
-  const id  = S.gistCfg.id    || GIST_ID;
-  const tok = S.gistCfg.token || GIST_TOKEN;
-  if (!id)  { setSS('yellow','数据已本地保存（未配置Gist ID）'); return false; }
-  if (!tok) { setSS('yellow','数据已本地保存（请在设置中配置 GitHub Token）'); return false; }
-  setSS('yellow','云端保存中…');
-  let isTimeout = false;
+async function syncPull() {
+  setSS('yellow','同步中…');
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => { isTimeout=true; controller.abort(); }, 12000);
-    const r = await fetch('https://api.github.com/gists/'+id, {
-      method: 'PATCH',
-      headers: {'Authorization':'token '+tok, 'Content-Type':'application/json'},
-      body:    JSON.stringify({files:{[GIST_FILE]:{content:JSON.stringify(data,null,2)}}}),
-      signal:  controller.signal
-    });
-    clearTimeout(timer);
-    if (!r.ok) throw new Error('HTTP '+r.status);
-    setSS('green','✅ 已同步至云端 '+new Date().toLocaleTimeString());
+    const data = await apiCall('GET', '/sync');
+    if (data.decisions)  S.allDecisions = mergeD(S.allDecisions, data.decisions);
+    if (data.reviewers)  S.reviewers    = mergeR(S.reviewers, data.reviewers);
+    if (data.config) {
+      if (data.config.criteria)    S.criteria = data.config.criteria;
+      if (data.config.adminConfig) applyAdminConfig(data.config.adminConfig);
+    }
+    saveLocal(); renderPapers(); refreshNC(); updateStatsIfActive();
+    setSS('green','已同步 ' + new Date().toLocaleTimeString());
+  } catch(e) {
+    if (e.name==='AbortError') setSS('yellow','⚠️ 同步超时（离线模式）');
+    else setSS('yellow','⚠️ 服务器不可达（离线模式）');
+  }
+}
+
+async function syncPush() {
+  const body = {
+    decisions: S.allDecisions,
+    reviewers: S.reviewers,
+    criteria:  S.criteria
+  };
+  if (S.user.isAdmin) body.adminConfig = {aiCfg: S.aiCfg};
+  setSS('yellow','保存中…');
+  try {
+    await apiCall('POST', '/sync', body, 12000);
+    setSS('green','✅ 已同步 ' + new Date().toLocaleTimeString());
     return true;
   } catch(e) {
-    if (isTimeout || e.name==='AbortError') setSS('yellow','⚠️ 网络超时，数据已本地保存');
-    else if (e.message.includes('401'))     setSS('red','❌ Token无效，请在设置中更新');
-    else                                    setSS('yellow','⚠️ 云端保存失败，数据已本地保存');
+    if (e.name==='AbortError') setSS('yellow','⚠️ 保存超时，数据已本地保存');
+    else setSS('yellow','⚠️ 保存失败，数据已本地保存');
     return false;
+  }
+}
+
+function applyAdminConfig(cfg) {
+  if (!cfg) return;
+  if (cfg.aiCfg && cfg.aiCfg.apiKey) {
+    S.aiCfg = {...S.aiCfg, ...cfg.aiCfg};
+    localStorage.setItem('cr_ai', JSON.stringify(S.aiCfg));
   }
 }
 
@@ -97,39 +106,6 @@ function mergeR(local, remote) {
   const map={};
   [...(remote||[]),...(local||[])].forEach(r=>{map[r.email]=r;});
   return Object.values(map);
-}
-
-async function syncPull() {
-  const rem = await gistRead();
-  if (!rem) return;
-  if (rem.decisions)   S.allDecisions = mergeD(S.allDecisions, rem.decisions);
-  if (rem.reviewers)   S.reviewers    = mergeR(S.reviewers, rem.reviewers);
-  if (rem.criteria)    S.criteria     = rem.criteria;
-  if (rem.adminConfig) applyAdminConfig(rem.adminConfig);
-  saveLocal(); renderPapers(); refreshNC(); updateStatsIfActive();
-}
-
-function applyAdminConfig(cfg) {
-  if (!cfg) return;
-  if (cfg.aiCfg && cfg.aiCfg.apiKey) {
-    S.aiCfg = { ...S.aiCfg, ...cfg.aiCfg };
-    localStorage.setItem('cr_ai', JSON.stringify(S.aiCfg));
-  }
-  if (cfg.gistToken) {
-    S.gistCfg.token = cfg.gistToken;
-    localStorage.setItem('cr_g', JSON.stringify(S.gistCfg));
-  }
-}
-
-async function syncPush() {
-  const data = {decisions:S.allDecisions, reviewers:S.reviewers, criteria:S.criteria, updatedBy:S.user.email, updatedAt:new Date().toISOString()};
-  if (S.user.isAdmin) {
-    data.adminConfig = {
-      aiCfg:     S.aiCfg,
-      gistToken: S.gistCfg.token || GIST_TOKEN
-    };
-  }
-  return gistWrite(data);
 }
 
 function saveLocal() {
@@ -633,25 +609,21 @@ document.getElementById('set-prov').onchange=function(){
   document.getElementById('cust-url').style.display=this.value==='custom'?'block':'none';
 };
 
-document.getElementById('save-gist').onclick=async()=>{
-  S.gistCfg.id=document.getElementById('set-gid').value.trim();
-  S.gistCfg.token=document.getElementById('set-gtk').value.trim();
-  localStorage.setItem('cr_g',JSON.stringify(S.gistCfg));
-  updGistDot(); toast('配置已保存，正在测试连接（最长15秒）…','info');
-  const r=await gistRead();
-  if (r!==null) {
-    toast('✅ 连接成功！数据已同步','success');
-  } else {
-    const sdotClass = document.getElementById('sdot').className;
-    if (sdotClass.includes('yellow')) {
-      toast('⚠️ 网络超时。配置已保存，同步将在网络恢复后自动重试','info');
-    } else {
-      toast('❌ 连接失败：Token或ID有误，请检查后重试','error');
-    }
+document.getElementById('force-sync').onclick=async()=>{await syncPull();toast('数据已从云端同步','success');};
+
+document.getElementById('test-api-btn').onclick=async()=>{
+  toast('测试连接中…','info');
+  try {
+    const d = await apiCall('GET', '/health', null, 8000);
+    document.getElementById('gdot').className='sdot green';
+    document.getElementById('gst-txt').textContent='✅ 服务器连接正常';
+    toast('✅ 服务器连接正常','success');
+  } catch(e) {
+    document.getElementById('gdot').className='sdot red';
+    document.getElementById('gst-txt').textContent='❌ 连接失败: '+e.message;
+    toast('❌ 连接失败: '+e.message,'error');
   }
 };
-
-document.getElementById('force-sync').onclick=async()=>{await syncPull();toast('数据已从云端同步','success');};
 
 document.getElementById('save-ai').onclick=async ()=>{
   S.aiCfg.provider=document.getElementById('set-prov').value;
@@ -691,9 +663,8 @@ document.getElementById('save-crit').onclick=()=>{
 };
 
 function updGistDot() {
-  const ok=!!(S.gistCfg.id||GIST_ID), tok=!!(S.gistCfg.token||GIST_TOKEN);
-  document.getElementById('gdot').className='sdot '+(ok&&tok?'green':ok?'yellow':'');
-  document.getElementById('gst-txt').textContent=ok&&tok?'已配置（读写）':ok?'已配置（只读）':'未配置';
+  document.getElementById('gdot').className='sdot yellow';
+  document.getElementById('gst-txt').textContent='点击「测试连接」检查服务器状态';
 }
 
 function updAiDot() {
