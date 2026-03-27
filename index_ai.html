@@ -359,28 +359,38 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
         <div class="sh">&#x2699;&#xFE0F; 系统设置</div>
         <div class="sets">
           <h3>&#x2601;&#xFE0F; 数据同步（GitHub Gist）</h3>
-          <div class="gi-box">评审数据通过 <strong>GitHub Gist</strong> 在所有评审员间共享。每次决策自动同步至云端，其他评审员30秒内可见。<br>
-            ⚠️ <strong>注意</strong>：中国大陆网络访问 GitHub API 可能不稳定。同步失败时评审数据仍会<strong>保存在本地</strong>，网络恢复后可点击「强制同步」上传。<br>
+          <div class="gi-box">评审数据通过 <strong>GitHub Gist</strong> 在所有评审员间共享。每次决策自动同步，每30秒自动拉取最新数据。<br>
+            ⚠️ 中国大陆访问 GitHub API 可能不稳定，同步失败时数据仍保存在本地，网络恢复后点「强制同步」即可。<br>
             当前 Gist ID: <code id="cur-gist-id">—</code></div>
-          <div class="fr"><label>Gist ID</label><input type="text" id="set-gid" placeholder="32位 Gist ID"></div>
-          <div class="fr"><label>GitHub Token（gist 权限）</label><input type="password" id="set-gtk" placeholder="ghp_xxxx" autocomplete="off"><div class="fh">Token 仅保存在本地浏览器，不会上传至任何第三方</div></div>
-          <div class="ast"><div class="sdot" id="gdot"></div><span id="gst-txt">未配置</span></div><br>
-          <button class="sbtn" id="save-gist">保存并测试连接</button>
-          <button class="sbtn" style="margin-left:8px;background:linear-gradient(135deg,#10b981,#059669)" id="force-sync">&#x1F504; 强制同步</button>
+          <div id="admin-only-gist">
+            <div class="fr"><label>Gist ID</label><input type="text" id="set-gid" placeholder="32位 Gist ID"></div>
+            <div class="fr"><label>GitHub Token（gist 权限）</label><input type="password" id="set-gtk" placeholder="ghp_xxxx" autocomplete="off"><div class="fh">仅保存本地浏览器</div></div>
+            <div class="ast"><div class="sdot" id="gdot"></div><span id="gst-txt">未配置</span></div><br>
+            <button class="sbtn" id="save-gist">保存并测试连接</button>
+          </div>
+          <button class="sbtn" style="margin-top:10px;background:linear-gradient(135deg,#10b981,#059669)" id="force-sync">&#x1F504; 强制同步</button>
         </div>
         <div class="sets">
           <h3>&#x1F916; AI API 配置</h3>
-          <div class="fr"><label>AI 提供商</label>
-            <select id="set-prov"><option value="deepseek">DeepSeek（推荐）</option><option value="openai">OpenAI</option><option value="custom">自定义代理</option></select></div>
-          <div class="fr"><label>API Key</label><input type="password" id="set-akey" placeholder="sk-..." autocomplete="off"><div class="fh">仅保存本地，不共享</div></div>
-          <div class="fr" id="cust-url" style="display:none"><label>自定义 API 地址</label><input type="text" id="set-abase" placeholder="https://api.deepseek.com/v1/chat/completions"></div>
-          <div class="fr"><label>模型</label>
-            <select id="set-mdl"><option value="deepseek-chat">deepseek-chat（推荐）</option><option value="deepseek-reasoner">deepseek-reasoner</option><option value="gpt-3.5-turbo">gpt-3.5-turbo</option><option value="gpt-4o">gpt-4o</option></select></div>
-          <div class="ast"><div class="sdot" id="ai-dot"></div><span id="ai-st">未配置</span></div><br>
-          <button class="sbtn" id="save-ai">保存 AI 设置</button>
+          <p id="member-ai-status" style="font-size:13px;padding:10px 0;display:none"></p>
+          <div id="admin-only-ai">
+            <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:7px;padding:10px;margin-bottom:12px;font-size:12px;color:#92400e">
+              &#x1F511; <strong>管理员专属</strong>：保存后 AI Key 会自动同步给所有成员，成员无需自行配置。
+            </div>
+            <div class="fr"><label>AI 提供商</label>
+              <select id="set-prov"><option value="deepseek">DeepSeek（推荐）</option><option value="openai">OpenAI</option><option value="custom">自定义代理</option></select></div>
+            <div class="fr"><label>API Key</label><input type="password" id="set-akey" placeholder="sk-..." autocomplete="off"></div>
+            <div class="fr" id="cust-url" style="display:none"><label>自定义 API 地址</label><input type="text" id="set-abase" placeholder="https://api.deepseek.com/v1/chat/completions"></div>
+            <div class="fr"><label>模型</label>
+              <select id="set-mdl"><option value="deepseek-chat">deepseek-chat（推荐）</option><option value="deepseek-reasoner">deepseek-reasoner</option><option value="gpt-3.5-turbo">gpt-3.5-turbo</option><option value="gpt-4o">gpt-4o</option></select></div>
+            <div class="ast"><div class="sdot" id="ai-dot"></div><span id="ai-st">未配置</span></div><br>
+            <button class="sbtn" id="save-ai">保存并同步给所有成员</button>
+          </div>
         </div>
-        <div class="sets">
-          <h3>&#x1F510; 密码管理</h3>
+        <div class="sets" id="admin-only-pwd">
+          <h3>&#x1F510; 密码管理（管理员）</h3>
+          <div class="fr"><label>修改哪个密码</label>
+            <select id="pwd-type"><option value="member">成员密码</option><option value="admin">管理员密码</option></select></div>
           <div class="fr"><label>当前密码</label><input type="password" id="cur-pwd" autocomplete="off"></div>
           <div class="fr"><label>新密码（至少6位）</label><input type="password" id="new-pwd" autocomplete="off"></div>
           <button class="sbtn" id="save-pwd">修改密码</button>
@@ -435,18 +445,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 <div class="twrap" id="twrap"></div>
 
 <script>
-const GIST_ID    = '96e9035efc97338f21124042cc694d5f';
+const GIST_ID     = '96e9035efc97338f21124042cc694d5f';
 const _T1 = 'ghp_3LYnYJICOqks'; const _T2 = 'QCRmWi02wCWnAsZgJM115OYu';
-const GIST_TOKEN = _T1 + _T2;
-const GIST_FILE  = 'clonal_review_data.json';
+const GIST_TOKEN  = _T1 + _T2;
+const GIST_FILE   = 'clonal_review_data.json';
 const DEFAULT_PWD = 'clonal2024';
-const API_URLS   = {
+const ADMIN_PWD   = 'admin2024';
+const API_URLS    = {
   deepseek: 'https://api.deepseek.com/v1/chat/completions',
   openai:   'https://api.openai.com/v1/chat/completions'
 };
 
 const S = {
-  user: {email:'', name:''},
+  user: {email:'', name:'', isAdmin:false},
   papers: [], allDecisions: {}, reviewers: [],
   criteria: {inclusion:'', exclusion:''},
   aiCfg: {provider:'deepseek', apiKey:'', baseURL:'', model:'deepseek-chat'},
@@ -456,7 +467,8 @@ const S = {
   totalStats: {total:0, high:0, medium:0}
 };
 
-const getPwd = () => localStorage.getItem('cr_pwd') || DEFAULT_PWD;
+const getPwd  = () => localStorage.getItem('cr_pwd')  || DEFAULT_PWD;
+const getAdminPwd = () => localStorage.getItem('cr_apwd') || ADMIN_PWD;
 
 /* ── GIST SYNC ── */
 async function gistRead() {
@@ -540,14 +552,27 @@ function mergeR(local, remote) {
 async function syncPull() {
   const rem = await gistRead();
   if (!rem) return;
-  if (rem.decisions) S.allDecisions = mergeD(S.allDecisions, rem.decisions);
-  if (rem.reviewers) S.reviewers    = mergeR(S.reviewers, rem.reviewers);
-  if (rem.criteria)  S.criteria     = rem.criteria;
+  if (rem.decisions)   S.allDecisions = mergeD(S.allDecisions, rem.decisions);
+  if (rem.reviewers)   S.reviewers    = mergeR(S.reviewers, rem.reviewers);
+  if (rem.criteria)    S.criteria     = rem.criteria;
+  if (rem.adminConfig) applyAdminConfig(rem.adminConfig);
   saveLocal(); renderPapers(); refreshNC(); updateStatsIfActive();
 }
 
+function applyAdminConfig(cfg) {
+  if (!cfg) return;
+  if (cfg.aiCfg && cfg.aiCfg.apiKey) {
+    S.aiCfg = { ...S.aiCfg, ...cfg.aiCfg };
+    localStorage.setItem('cr_ai', JSON.stringify(S.aiCfg));
+  }
+}
+
 async function syncPush() {
-  return gistWrite({decisions:S.allDecisions, reviewers:S.reviewers, criteria:S.criteria, updatedBy:S.user.email, updatedAt:new Date().toISOString()});
+  const data = {decisions:S.allDecisions, reviewers:S.reviewers, criteria:S.criteria, updatedBy:S.user.email, updatedAt:new Date().toISOString()};
+  if (S.user.isAdmin && S.aiCfg.apiKey) {
+    data.adminConfig = { aiCfg: S.aiCfg };
+  }
+  return gistWrite(data);
 }
 
 function saveLocal() {
@@ -575,17 +600,19 @@ document.getElementById('login-btn').onclick = async () => {
   errEl.style.display='none';
   if (!email||!email.includes('@')) { errEl.textContent='请输入有效邮箱'; errEl.style.display='block'; return; }
   if (!name)  { errEl.textContent='请输入姓名'; errEl.style.display='block'; return; }
-  if (pwd!==getPwd()) { errEl.textContent='密码错误'; errEl.style.display='block'; return; }
+  const isAdmin = pwd === getAdminPwd();
+  if (pwd !== getPwd() && !isAdmin) { errEl.textContent='密码错误'; errEl.style.display='block'; return; }
   const btn=document.getElementById('login-btn');
   btn.disabled=true; btn.textContent='连接中…';
   document.getElementById('lsync').textContent='正在加载共享数据…';
-  S.user={email,name};
+  S.user={email, name, isAdmin};
   loadLocal();
   const rem=await gistRead();
   if (rem) {
-    if (rem.decisions) S.allDecisions=mergeD(S.allDecisions,rem.decisions);
-    if (rem.reviewers) S.reviewers=mergeR(S.reviewers,rem.reviewers);
-    if (rem.criteria)  S.criteria=rem.criteria;
+    if (rem.decisions)   S.allDecisions=mergeD(S.allDecisions,rem.decisions);
+    if (rem.reviewers)   S.reviewers=mergeR(S.reviewers,rem.reviewers);
+    if (rem.criteria)    S.criteria=rem.criteria;
+    if (rem.adminConfig) applyAdminConfig(rem.adminConfig);
     saveLocal();
   }
   if (!S.reviewers.find(r=>r.email===email)) {
@@ -1029,6 +1056,19 @@ function renderSettingsUI() {
   document.getElementById('set-inc').value=S.criteria.inclusion;
   document.getElementById('set-exc').value=S.criteria.exclusion;
   document.getElementById('cust-url').style.display=S.aiCfg.provider==='custom'?'block':'none';
+
+  const isAdmin = S.user.isAdmin;
+  document.getElementById('admin-only-gist').style.display = isAdmin ? 'block' : 'none';
+  document.getElementById('admin-only-ai').style.display   = isAdmin ? 'block' : 'none';
+  document.getElementById('admin-only-pwd').style.display  = isAdmin ? 'block' : 'none';
+  document.getElementById('member-ai-status').style.display = isAdmin ? 'none' : 'block';
+  if (!isAdmin && S.aiCfg.apiKey) {
+    document.getElementById('member-ai-status').textContent = '✅ AI 已由管理员配置，可直接使用';
+    document.getElementById('member-ai-status').style.color = '#10b981';
+  } else if (!isAdmin) {
+    document.getElementById('member-ai-status').textContent = '⏳ AI 待管理员配置，配置后自动生效';
+    document.getElementById('member-ai-status').style.color = '#f59e0b';
+  }
   updGistDot(); updAiDot(); renderRVM();
 }
 
@@ -1056,22 +1096,35 @@ document.getElementById('save-gist').onclick=async()=>{
 
 document.getElementById('force-sync').onclick=async()=>{await syncPull();toast('数据已从云端同步','success');};
 
-document.getElementById('save-ai').onclick=()=>{
+document.getElementById('save-ai').onclick=async ()=>{
   S.aiCfg.provider=document.getElementById('set-prov').value;
   S.aiCfg.apiKey=document.getElementById('set-akey').value.trim();
   S.aiCfg.baseURL=document.getElementById('set-abase').value.trim();
   S.aiCfg.model=document.getElementById('set-mdl').value;
   localStorage.setItem('cr_ai',JSON.stringify(S.aiCfg));
-  updAiDot(); toast('AI 设置已保存','success');
+  updAiDot();
+  if (S.user.isAdmin) {
+    toast('AI 设置已保存，正在同步给所有成员…','info');
+    await syncPush();
+    toast('✅ AI 设置已同步至所有成员','success');
+  } else {
+    toast('AI 设置已保存','success');
+  }
 };
 
 document.getElementById('save-pwd').onclick=()=>{
   const cur=document.getElementById('cur-pwd').value, nw=document.getElementById('new-pwd').value;
-  if (cur!==getPwd()) { toast('当前密码错误','error'); return; }
-  if (nw.length<6)    { toast('新密码至少6位','error'); return; }
-  localStorage.setItem('cr_pwd',nw);
+  const pwdType = document.getElementById('pwd-type').value;
+  if (pwdType==='member') {
+    if (cur!==getPwd()) { toast('当前成员密码错误','error'); return; }
+    if (nw.length<6) { toast('新密码至少6位','error'); return; }
+    localStorage.setItem('cr_pwd',nw); toast('成员密码已修改','success');
+  } else {
+    if (cur!==getAdminPwd()) { toast('当前管理员密码错误','error'); return; }
+    if (nw.length<6) { toast('新密码至少6位','error'); return; }
+    localStorage.setItem('cr_apwd',nw); toast('管理员密码已修改','success');
+  }
   document.getElementById('cur-pwd').value=''; document.getElementById('new-pwd').value='';
-  toast('密码已修改','success');
 };
 
 document.getElementById('save-crit').onclick=()=>{

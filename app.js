@@ -1,15 +1,16 @@
-const GIST_ID    = '96e9035efc97338f21124042cc694d5f';
+const GIST_ID     = '96e9035efc97338f21124042cc694d5f';
 const _T1 = 'ghp_3LYnYJICOqks'; const _T2 = 'QCRmWi02wCWnAsZgJM115OYu';
-const GIST_TOKEN = _T1 + _T2;
-const GIST_FILE  = 'clonal_review_data.json';
+const GIST_TOKEN  = _T1 + _T2;
+const GIST_FILE   = 'clonal_review_data.json';
 const DEFAULT_PWD = 'clonal2024';
-const API_URLS   = {
+const ADMIN_PWD   = 'admin2024';
+const API_URLS    = {
   deepseek: 'https://api.deepseek.com/v1/chat/completions',
   openai:   'https://api.openai.com/v1/chat/completions'
 };
 
 const S = {
-  user: {email:'', name:''},
+  user: {email:'', name:'', isAdmin:false},
   papers: [], allDecisions: {}, reviewers: [],
   criteria: {inclusion:'', exclusion:''},
   aiCfg: {provider:'deepseek', apiKey:'', baseURL:'', model:'deepseek-chat'},
@@ -19,7 +20,8 @@ const S = {
   totalStats: {total:0, high:0, medium:0}
 };
 
-const getPwd = () => localStorage.getItem('cr_pwd') || DEFAULT_PWD;
+const getPwd  = () => localStorage.getItem('cr_pwd')  || DEFAULT_PWD;
+const getAdminPwd = () => localStorage.getItem('cr_apwd') || ADMIN_PWD;
 
 /* ── GIST SYNC ── */
 async function gistRead() {
@@ -103,14 +105,27 @@ function mergeR(local, remote) {
 async function syncPull() {
   const rem = await gistRead();
   if (!rem) return;
-  if (rem.decisions) S.allDecisions = mergeD(S.allDecisions, rem.decisions);
-  if (rem.reviewers) S.reviewers    = mergeR(S.reviewers, rem.reviewers);
-  if (rem.criteria)  S.criteria     = rem.criteria;
+  if (rem.decisions)   S.allDecisions = mergeD(S.allDecisions, rem.decisions);
+  if (rem.reviewers)   S.reviewers    = mergeR(S.reviewers, rem.reviewers);
+  if (rem.criteria)    S.criteria     = rem.criteria;
+  if (rem.adminConfig) applyAdminConfig(rem.adminConfig);
   saveLocal(); renderPapers(); refreshNC(); updateStatsIfActive();
 }
 
+function applyAdminConfig(cfg) {
+  if (!cfg) return;
+  if (cfg.aiCfg && cfg.aiCfg.apiKey) {
+    S.aiCfg = { ...S.aiCfg, ...cfg.aiCfg };
+    localStorage.setItem('cr_ai', JSON.stringify(S.aiCfg));
+  }
+}
+
 async function syncPush() {
-  return gistWrite({decisions:S.allDecisions, reviewers:S.reviewers, criteria:S.criteria, updatedBy:S.user.email, updatedAt:new Date().toISOString()});
+  const data = {decisions:S.allDecisions, reviewers:S.reviewers, criteria:S.criteria, updatedBy:S.user.email, updatedAt:new Date().toISOString()};
+  if (S.user.isAdmin && S.aiCfg.apiKey) {
+    data.adminConfig = { aiCfg: S.aiCfg };
+  }
+  return gistWrite(data);
 }
 
 function saveLocal() {
@@ -138,17 +153,19 @@ document.getElementById('login-btn').onclick = async () => {
   errEl.style.display='none';
   if (!email||!email.includes('@')) { errEl.textContent='请输入有效邮箱'; errEl.style.display='block'; return; }
   if (!name)  { errEl.textContent='请输入姓名'; errEl.style.display='block'; return; }
-  if (pwd!==getPwd()) { errEl.textContent='密码错误'; errEl.style.display='block'; return; }
+  const isAdmin = pwd === getAdminPwd();
+  if (pwd !== getPwd() && !isAdmin) { errEl.textContent='密码错误'; errEl.style.display='block'; return; }
   const btn=document.getElementById('login-btn');
   btn.disabled=true; btn.textContent='连接中…';
   document.getElementById('lsync').textContent='正在加载共享数据…';
-  S.user={email,name};
+  S.user={email, name, isAdmin};
   loadLocal();
   const rem=await gistRead();
   if (rem) {
-    if (rem.decisions) S.allDecisions=mergeD(S.allDecisions,rem.decisions);
-    if (rem.reviewers) S.reviewers=mergeR(S.reviewers,rem.reviewers);
-    if (rem.criteria)  S.criteria=rem.criteria;
+    if (rem.decisions)   S.allDecisions=mergeD(S.allDecisions,rem.decisions);
+    if (rem.reviewers)   S.reviewers=mergeR(S.reviewers,rem.reviewers);
+    if (rem.criteria)    S.criteria=rem.criteria;
+    if (rem.adminConfig) applyAdminConfig(rem.adminConfig);
     saveLocal();
   }
   if (!S.reviewers.find(r=>r.email===email)) {
@@ -592,6 +609,19 @@ function renderSettingsUI() {
   document.getElementById('set-inc').value=S.criteria.inclusion;
   document.getElementById('set-exc').value=S.criteria.exclusion;
   document.getElementById('cust-url').style.display=S.aiCfg.provider==='custom'?'block':'none';
+
+  const isAdmin = S.user.isAdmin;
+  document.getElementById('admin-only-gist').style.display = isAdmin ? 'block' : 'none';
+  document.getElementById('admin-only-ai').style.display   = isAdmin ? 'block' : 'none';
+  document.getElementById('admin-only-pwd').style.display  = isAdmin ? 'block' : 'none';
+  document.getElementById('member-ai-status').style.display = isAdmin ? 'none' : 'block';
+  if (!isAdmin && S.aiCfg.apiKey) {
+    document.getElementById('member-ai-status').textContent = '✅ AI 已由管理员配置，可直接使用';
+    document.getElementById('member-ai-status').style.color = '#10b981';
+  } else if (!isAdmin) {
+    document.getElementById('member-ai-status').textContent = '⏳ AI 待管理员配置，配置后自动生效';
+    document.getElementById('member-ai-status').style.color = '#f59e0b';
+  }
   updGistDot(); updAiDot(); renderRVM();
 }
 
@@ -619,22 +649,35 @@ document.getElementById('save-gist').onclick=async()=>{
 
 document.getElementById('force-sync').onclick=async()=>{await syncPull();toast('数据已从云端同步','success');};
 
-document.getElementById('save-ai').onclick=()=>{
+document.getElementById('save-ai').onclick=async ()=>{
   S.aiCfg.provider=document.getElementById('set-prov').value;
   S.aiCfg.apiKey=document.getElementById('set-akey').value.trim();
   S.aiCfg.baseURL=document.getElementById('set-abase').value.trim();
   S.aiCfg.model=document.getElementById('set-mdl').value;
   localStorage.setItem('cr_ai',JSON.stringify(S.aiCfg));
-  updAiDot(); toast('AI 设置已保存','success');
+  updAiDot();
+  if (S.user.isAdmin) {
+    toast('AI 设置已保存，正在同步给所有成员…','info');
+    await syncPush();
+    toast('✅ AI 设置已同步至所有成员','success');
+  } else {
+    toast('AI 设置已保存','success');
+  }
 };
 
 document.getElementById('save-pwd').onclick=()=>{
   const cur=document.getElementById('cur-pwd').value, nw=document.getElementById('new-pwd').value;
-  if (cur!==getPwd()) { toast('当前密码错误','error'); return; }
-  if (nw.length<6)    { toast('新密码至少6位','error'); return; }
-  localStorage.setItem('cr_pwd',nw);
+  const pwdType = document.getElementById('pwd-type').value;
+  if (pwdType==='member') {
+    if (cur!==getPwd()) { toast('当前成员密码错误','error'); return; }
+    if (nw.length<6) { toast('新密码至少6位','error'); return; }
+    localStorage.setItem('cr_pwd',nw); toast('成员密码已修改','success');
+  } else {
+    if (cur!==getAdminPwd()) { toast('当前管理员密码错误','error'); return; }
+    if (nw.length<6) { toast('新密码至少6位','error'); return; }
+    localStorage.setItem('cr_apwd',nw); toast('管理员密码已修改','success');
+  }
   document.getElementById('cur-pwd').value=''; document.getElementById('new-pwd').value='';
-  toast('密码已修改','success');
 };
 
 document.getElementById('save-crit').onclick=()=>{
