@@ -1,6 +1,5 @@
-const GIST_ID     = '96e9035efc97338f21124042cc694d5f';
-const _T1 = 'ghp_3LYnYJICOqks'; const _T2 = 'QCRmWi02wCWnAsZgJM115OYu';
-const GIST_TOKEN  = _T1 + _T2;
+const GIST_ID     = '19f651ea4521a63cebb47ff00b24afe1';
+const GIST_TOKEN  = '';
 const GIST_FILE   = 'clonal_review_data.json';
 const DEFAULT_PWD = 'clonal2024';
 const ADMIN_PWD   = 'admin2024';
@@ -25,16 +24,17 @@ const getAdminPwd = () => localStorage.getItem('cr_apwd') || ADMIN_PWD;
 
 /* ── GIST SYNC ── */
 async function gistRead() {
-  const id = S.gistCfg.id || GIST_ID, tok = S.gistCfg.token || GIST_TOKEN;
+  const id = S.gistCfg.id || GIST_ID;
   if (!id) return null;
   setSS('yellow','同步中…');
   let isTimeout = false;
   try {
-    const h = {'Cache-Control':'no-cache'};
-    if (tok) h['Authorization'] = 'token '+tok;
     const controller = new AbortController();
     const timer = setTimeout(() => { isTimeout=true; controller.abort(); }, 15000);
-    const r = await fetch('https://api.github.com/gists/'+id, {headers:h, signal:controller.signal});
+    const r = await fetch('https://api.github.com/gists/'+id, {
+      headers: {'Cache-Control':'no-cache'},
+      signal: controller.signal
+    });
     clearTimeout(timer);
     if (!r.ok) throw new Error('HTTP '+r.status);
     const d = await r.json(), f = d.files[GIST_FILE];
@@ -42,32 +42,28 @@ async function gistRead() {
     setSS('green','已同步 '+new Date().toLocaleTimeString());
     return JSON.parse(f.content||'{}');
   } catch(e) {
-    if (isTimeout || e.name==='AbortError') {
-      setSS('yellow','⚠️ 网络超时（已进入离线模式，本地数据正常使用）');
-    } else if (e.message.includes('401')) {
-      setSS('red','❌ Token无效，请在设置中更新');
-    } else if (e.message.includes('404')) {
-      setSS('red','❌ Gist ID不存在，请在设置中检查');
-    } else {
-      setSS('yellow','⚠️ GitHub不可达（离线模式）');
-    }
+    if (isTimeout || e.name==='AbortError') setSS('yellow','⚠️ 网络超时（离线模式）');
+    else if (e.message.includes('404'))     setSS('red','❌ Gist不存在');
+    else                                    setSS('yellow','⚠️ GitHub不可达（离线模式）');
     return null;
   }
 }
 
 async function gistWrite(data) {
-  const id = S.gistCfg.id || GIST_ID, tok = S.gistCfg.token || GIST_TOKEN;
-  if (!id || !tok) { setSS('yellow','数据已本地保存（未配置Token）'); return false; }
+  const id  = S.gistCfg.id    || GIST_ID;
+  const tok = S.gistCfg.token || GIST_TOKEN;
+  if (!id)  { setSS('yellow','数据已本地保存（未配置Gist ID）'); return false; }
+  if (!tok) { setSS('yellow','数据已本地保存（请在设置中配置 GitHub Token）'); return false; }
   setSS('yellow','云端保存中…');
   let isTimeout = false;
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => { isTimeout=true; controller.abort(); }, 12000);
     const r = await fetch('https://api.github.com/gists/'+id, {
-      method:'PATCH',
-      headers:{'Authorization':'token '+tok,'Content-Type':'application/json'},
-      body:JSON.stringify({files:{[GIST_FILE]:{content:JSON.stringify(data,null,2)}}}),
-      signal: controller.signal
+      method: 'PATCH',
+      headers: {'Authorization':'token '+tok, 'Content-Type':'application/json'},
+      body:    JSON.stringify({files:{[GIST_FILE]:{content:JSON.stringify(data,null,2)}}}),
+      signal:  controller.signal
     });
     clearTimeout(timer);
     if (!r.ok) throw new Error('HTTP '+r.status);
@@ -75,7 +71,8 @@ async function gistWrite(data) {
     return true;
   } catch(e) {
     if (isTimeout || e.name==='AbortError') setSS('yellow','⚠️ 网络超时，数据已本地保存');
-    else setSS('yellow','⚠️ 云端保存失败，数据已本地保存');
+    else if (e.message.includes('401'))     setSS('red','❌ Token无效，请在设置中更新');
+    else                                    setSS('yellow','⚠️ 云端保存失败，数据已本地保存');
     return false;
   }
 }
@@ -742,8 +739,8 @@ function toast(msg, type='info') {
 
 /* ── INIT ── */
 loadLocal();
-if (!S.gistCfg.token) {
-  S.gistCfg = { id: GIST_ID, token: GIST_TOKEN };
+if (!S.gistCfg.id) {
+  S.gistCfg.id = GIST_ID;
   localStorage.setItem('cr_g', JSON.stringify(S.gistCfg));
 }
 renderSettingsUI();
