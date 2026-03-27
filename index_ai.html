@@ -569,12 +569,19 @@ function applyAdminConfig(cfg) {
     S.aiCfg = { ...S.aiCfg, ...cfg.aiCfg };
     localStorage.setItem('cr_ai', JSON.stringify(S.aiCfg));
   }
+  if (cfg.gistToken) {
+    S.gistCfg.token = cfg.gistToken;
+    localStorage.setItem('cr_g', JSON.stringify(S.gistCfg));
+  }
 }
 
 async function syncPush() {
   const data = {decisions:S.allDecisions, reviewers:S.reviewers, criteria:S.criteria, updatedBy:S.user.email, updatedAt:new Date().toISOString()};
-  if (S.user.isAdmin && S.aiCfg.apiKey) {
-    data.adminConfig = { aiCfg: S.aiCfg };
+  if (S.user.isAdmin) {
+    data.adminConfig = {
+      aiCfg:     S.aiCfg,
+      gistToken: S.gistCfg.token || GIST_TOKEN
+    };
   }
   return gistWrite(data);
 }
