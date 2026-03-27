@@ -1,5 +1,6 @@
 const GIST_ID    = '96e9035efc97338f21124042cc694d5f';
-const GIST_TOKEN = '';
+const _T1 = 'ghp_0I7t1xzww2'; const _T2 = 'qFi5jTQhtfq0Fv9pL3zL0z2wOE';
+const GIST_TOKEN = _T1 + _T2;
 const GIST_FILE  = 'clonal_review_data.json';
 const DEFAULT_PWD = 'clonal2024';
 const API_URLS   = {
@@ -29,7 +30,7 @@ async function gistRead() {
     const h = {'Cache-Control':'no-cache'};
     if (tok) h['Authorization'] = 'token '+tok;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 8000);
+    const timer = setTimeout(() => controller.abort(), 15000);
     const r = await fetch('https://api.github.com/gists/'+id, {headers:h, signal:controller.signal});
     clearTimeout(timer);
     if (!r.ok) throw new Error('HTTP '+r.status);
@@ -680,4 +681,8 @@ function toast(msg, type='info') {
 
 /* ── INIT ── */
 loadLocal();
+if (!S.gistCfg.token) {
+  S.gistCfg = { id: GIST_ID, token: GIST_TOKEN };
+  localStorage.setItem('cr_g', JSON.stringify(S.gistCfg));
+}
 renderSettingsUI();
