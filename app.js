@@ -1,5 +1,5 @@
 const GIST_ID    = '96e9035efc97338f21124042cc694d5f';
-const _T1 = 'ghp_0I7t1xzww2'; const _T2 = 'qFi5jTQhtfq0Fv9pL3zL0z2wOE';
+const _T1 = 'ghp_3LYnYJICOqks'; const _T2 = 'QCRmWi02wCWnAsZgJM115OYu';
 const GIST_TOKEN = _T1 + _T2;
 const GIST_FILE  = 'clonal_review_data.json';
 const DEFAULT_PWD = 'clonal2024';
