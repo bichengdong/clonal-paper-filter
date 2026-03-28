@@ -457,6 +457,7 @@ const S = {
   papers: [], allDecisions: {}, reviewers: [],
   criteria: {inclusion:'', exclusion:''},
   aiCfg: {provider:'deepseek', apiKey:'', baseURL:'', model:'deepseek-chat'},
+  gistCfg: {id:'', token:''},
   filter:'all', search:'', page:1, totalPages:1, confType:'high',
   selected: new Set(), did: null,
   totalStats: {total:0, high:0, medium:0}
@@ -586,14 +587,6 @@ document.getElementById('login-btn').onclick = async () => {
   document.getElementById('lsync').textContent='正在加载共享数据…';
   S.user={email, name, isAdmin};
   loadLocal();
-  const rem=await gistRead();
-  if (rem) {
-    if (rem.decisions)   S.allDecisions=mergeD(S.allDecisions,rem.decisions);
-    if (rem.reviewers)   S.reviewers=mergeR(S.reviewers,rem.reviewers);
-    if (rem.criteria)    S.criteria=rem.criteria;
-    if (rem.adminConfig) applyAdminConfig(rem.adminConfig);
-    saveLocal();
-  }
   if (!S.reviewers.find(r=>r.email===email)) {
     S.reviewers.push({email,name,joinedAt:new Date().toISOString()});
     saveLocal(); syncPush();
@@ -1024,10 +1017,6 @@ function dlf(name,content,type) {
 
 /* ── SETTINGS ── */
 function renderSettingsUI() {
-  const gid=S.gistCfg.id||GIST_ID;
-  document.getElementById('set-gid').value=gid;
-  document.getElementById('set-gtk').value=S.gistCfg.token||GIST_TOKEN;
-  document.getElementById('cur-gist-id').textContent=gid||'未配置';
   document.getElementById('set-prov').value=S.aiCfg.provider;
   document.getElementById('set-akey').value=S.aiCfg.apiKey;
   document.getElementById('set-abase').value=S.aiCfg.baseURL;
@@ -1037,7 +1026,6 @@ function renderSettingsUI() {
   document.getElementById('cust-url').style.display=S.aiCfg.provider==='custom'?'block':'none';
 
   const isAdmin = S.user.isAdmin;
-  document.getElementById('admin-only-gist').style.display = isAdmin ? 'block' : 'none';
   document.getElementById('admin-only-ai').style.display   = isAdmin ? 'block' : 'none';
   document.getElementById('admin-only-pwd').style.display  = isAdmin ? 'block' : 'none';
   document.getElementById('member-ai-status').style.display = isAdmin ? 'none' : 'block';
@@ -1163,10 +1151,6 @@ function toast(msg, type='info') {
 
 /* ── INIT ── */
 loadLocal();
-if (!S.gistCfg.id) {
-  S.gistCfg.id = GIST_ID;
-  localStorage.setItem('cr_g', JSON.stringify(S.gistCfg));
-}
 renderSettingsUI();
 
 </script>
