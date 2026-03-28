@@ -469,7 +469,11 @@ const S = {
   gistCfg: {id:'', token:''},
   filter:'all', search:'', page:1, totalPages:1, confType:'all',
   selected: new Set(), did: null,
-  totalStats: {total:0, high:0, medium:0}
+  totalStats: {total:0, high:0, medium:0},
+  searchIndex: [],       // 全量索引，用于跨页搜索
+  searchMode: false,     // 是否处于搜索模式
+  searchResults: [],     // 搜索结果（来自索引）
+  searchPage: 1, searchTotalPages: 1
 };
 
 const getPwd      = () => localStorage.getItem('cr_pwd')  || DEFAULT_PWD;
@@ -606,6 +610,7 @@ document.getElementById('login-btn').onclick = async () => {
   document.getElementById('app').style.display='block';
   btn.disabled=false; btn.textContent='进入评审系统';
   await loadStats();
+  loadSearchIndex();
   await loadPapers(1,'all');
   refreshNC(); renderSettingsUI();
   setInterval(syncPull,300000);
@@ -623,8 +628,49 @@ async function loadStats() {
   try { const r=await fetch('data/stats.json'); S.totalStats=await r.json(); } catch(e) {}
 }
 
+async function loadSearchIndex() {
+  try {
+    const r=await fetch('data/search_index.json');
+    S.searchIndex=await r.json();
+  } catch(e) { S.searchIndex=[]; }
+}
+
+const PAGE_SIZE=200;
+function applySearch(keyword) {
+  const q=keyword.trim().toLowerCase();
+  S.search=keyword;
+  if (!q) {
+    S.searchMode=false; S.searchResults=[];
+    renderPapers(); updatePager(); return;
+  }
+  S.searchMode=true;
+  const typeFilter=['high','medium','low','exclude','all'].includes(S.filter)&&S.filter!=='all' ? S.filter : null;
+  S.searchResults=S.searchIndex.filter(p=>{
+    if (typeFilter && p.decision.toLowerCase()!==typeFilter) return false;
+    return ((p.title||'')+' '+(p.authors||'')+' '+(p.journal||'')+' '+(p.wos_id||'')+' '+(p.year||'')).toLowerCase().includes(q);
+  });
+  S.searchPage=1;
+  S.searchTotalPages=Math.max(1,Math.ceil(S.searchResults.length/PAGE_SIZE));
+  renderSearchResults(); updatePager();
+}
+
+function renderSearchResults() {
+  const start=(S.searchPage-1)*PAGE_SIZE;
+  const slice=S.searchResults.slice(start,start+PAGE_SIZE);
+  S.papers=slice;
+  document.getElementById('linfo').textContent=S.searchResults.length+' 篇（搜索结果）';
+  document.getElementById('fcnt').textContent=S.searchResults.length+' 篇';
+  if (!slice.length) {
+    document.getElementById('plist').innerHTML='<div class="empty"><div class="ei">🔍</div><p>没有符合条件的文献</p></div>';
+    return;
+  }
+  document.getElementById('plist').innerHTML=slice.map(renderCard).join('');
+  bindEv();
+}
+
 async function loadPapers(pg, type) {
   if (type) S.confType=type;
+  S.searchMode=false; S.search=''; document.getElementById('srch').value='';
   document.getElementById('plist').innerHTML='<div class="empty"><div class="ei"><span class="spin"></span></div><p style="margin-top:8px;font-size:12px">加载文献中…</p></div>';
   try {
     const controller = new AbortController();
@@ -676,11 +722,9 @@ function hasConflict(pid) {
 function getFiltered() {
   return S.papers.filter(p=>{
     const dec=myDec(p.id);
-    const s=S.search.toLowerCase();
-    if (s && !((p.title||'')+' '+(p.authors||'')+' '+(p.journal||'')+' '+(p.wos_id||'')).toLowerCase().includes(s)) return false;
     const f=S.filter;
     if (f==='all')      return true;
-    if (['high','medium','low','exclude'].includes(f)) return S.confType===f;
+    if (['high','medium','low','exclude'].includes(f)) return (p.decision||'').toLowerCase()===f||S.confType===f;
     if (f==='included') return dec?.decision==='included';
     if (f==='excluded') return dec?.decision==='excluded';
     if (f==='maybe')    return dec?.decision==='maybe';
@@ -767,12 +811,20 @@ document.getElementById('sel-all').onchange=function(){
 
 /* ── PAGER ── */
 function updatePager() {
-  document.getElementById('pgri').textContent='第 '+S.page+' / '+S.totalPages+' 页';
-  document.getElementById('prev-btn').disabled=S.page<=1;
-  document.getElementById('next-btn').disabled=S.page>=S.totalPages;
+  const pg   = S.searchMode ? S.searchPage    : S.page;
+  const tot  = S.searchMode ? S.searchTotalPages : S.totalPages;
+  document.getElementById('pgri').textContent='第 '+pg+' / '+tot+' 页';
+  document.getElementById('prev-btn').disabled=pg<=1;
+  document.getElementById('next-btn').disabled=pg>=tot;
 }
-document.getElementById('prev-btn').onclick=()=>loadPapers(S.page-1);
-document.getElementById('next-btn').onclick=()=>loadPapers(S.page+1);
+document.getElementById('prev-btn').onclick=()=>{
+  if (S.searchMode) { S.searchPage--; renderSearchResults(); updatePager(); }
+  else loadPapers(S.page-1);
+};
+document.getElementById('next-btn').onclick=()=>{
+  if (S.searchMode) { S.searchPage++; renderSearchResults(); updatePager(); }
+  else loadPapers(S.page+1);
+};
 
 /* ── NAV ── */
 document.querySelectorAll('.ni[data-pg]').forEach(item=>{
@@ -831,11 +883,17 @@ document.querySelectorAll('.fc').forEach(c=>{
     document.querySelectorAll('.fc').forEach(x=>x.classList.remove('active'));
     c.classList.add('active'); S.filter=c.dataset.f;
     const typeFilters = ['high','medium','low','exclude','all'];
-    if (typeFilters.includes(S.filter) && S.confType !== S.filter) loadPapers(1, S.filter);
-    else renderPapers();
+    if (typeFilters.includes(S.filter)) {
+      if (S.search.trim()) { applySearch(S.search); }
+      else if (S.confType !== S.filter) loadPapers(1, S.filter);
+      else renderPapers();
+    } else {
+      if (S.searchMode) renderSearchResults();
+      else renderPapers();
+    }
   };
 });
-document.getElementById('srch').oninput=function(){S.search=this.value;renderPapers();};
+document.getElementById('srch').oninput=function(){applySearch(this.value);};
 
 /* ── DETAIL PANEL ── */
 function openDp(pid) {
