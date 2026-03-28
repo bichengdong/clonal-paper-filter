@@ -1,4 +1,4 @@
-const SERVER_API  = 'https://bichengdong.net/api';
+const SERVER_API  = 'https://www.bichengdong.net/api';
 const DEFAULT_PWD = 'clonal2024';
 const ADMIN_PWD   = 'admin2024';
 const AI_URLS     = {
