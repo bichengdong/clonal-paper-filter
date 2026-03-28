@@ -2,17 +2,19 @@
 
 **克隆植物文献系统综述评审平台 | Systematic Review Platform for Clonal Plant Literature**
 
+🌐 **在线访问 | Live System: [https://bichengdong.github.io/clonal-paper-filter/](https://bichengdong.github.io/clonal-paper-filter/)**
+
 ---
 
 ## 简介 | Introduction
 
 **中文**
 
-ClonalReview 是一个专为克隆植物生态学系统综述设计的多人协作文献筛选平台。团队成员可通过浏览器访问，实时共享评审决策，支持 AI 辅助筛选，无需安装任何软件。
+ClonalReview 是一个专为克隆植物生态学系统综述设计的多人协作文献筛选平台。收录文献 **15,173 篇**，团队成员可通过浏览器直接访问，实时共享评审决策，支持 AI 辅助筛选，无需安装任何软件。
 
 **English**
 
-ClonalReview is a collaborative literature screening platform designed for systematic reviews of clonal plant ecology. Team members can access it via browser, share review decisions in real time, and use AI-assisted screening — no installation required.
+ClonalReview is a collaborative literature screening platform designed for systematic reviews of clonal plant ecology. It covers **15,173 papers** and allows team members to access via browser, share review decisions in real time, and use AI-assisted screening — no installation required.
 
 ---
 
@@ -20,13 +22,14 @@ ClonalReview is a collaborative literature screening platform designed for syste
 
 | 功能 | Feature |
 |------|---------|
-| 📄 文献列表分页浏览 | Paginated literature browsing |
+| 📄 15,173 篇文献分页浏览 | Browse 15,173 papers with pagination |
+| 🏷️ HIGH / MEDIUM / LOW / EXCLUDE 分级显示 | Tiered display: HIGH / MEDIUM / LOW / EXCLUDE |
 | ✅ 纳入 / ❌ 排除 / ❓ 待定 决策 | Include / Exclude / Maybe decisions |
 | 🤖 AI 辅助筛选（DeepSeek / OpenAI） | AI-assisted screening (DeepSeek / OpenAI) |
 | 👥 多评审员实时协作 | Multi-reviewer real-time collaboration |
 | ⚡ 冲突检测与解决 | Conflict detection and resolution |
 | 📊 评审进度统计 | Review progress statistics |
-| 📥 CSV / PRISMA 数据导出 | CSV / PRISMA data export |
+| 📥 CSV / PRISMA / 全体评审员 数据导出 | CSV / PRISMA / All-reviewer data export |
 | 🔄 云端自动同步（每5分钟） | Cloud auto-sync (every 5 minutes) |
 | 🔒 密码访问控制 | Password-based access control |
 
@@ -36,11 +39,7 @@ ClonalReview is a collaborative literature screening platform designed for syste
 
 ### 访问系统 | Access
 
-直接访问在线版本：
-
-Access the live system:
-
-👉 **https://bichengdong.github.io/clonal-paper-filter/**
+👉 **[https://bichengdong.github.io/clonal-paper-filter/](https://bichengdong.github.io/clonal-paper-filter/)**
 
 ### 登录 | Login
 
@@ -51,7 +50,19 @@ Access the live system:
 
 > 管理员可配置 AI API Key 并自动同步给所有成员。
 >
-> Admin can configure AI API Key which syncs automatically to all members.
+> Admin can configure the AI API Key in Settings; it syncs automatically to all members.
+
+---
+
+## 文献数据 | Dataset
+
+| 类型 Type | 数量 Count | 说明 Description |
+|-----------|-----------|-----------------|
+| HIGH | 6,950 | 高置信度克隆植物文献 High-confidence clonal plant papers |
+| MEDIUM | 3,595 | 中置信度文献 Medium-confidence papers |
+| LOW | 3,142 | 低置信度文献 Low-confidence papers |
+| EXCLUDE | 1,486 | 初步排除文献 Preliminarily excluded papers |
+| **合计 Total** | **15,173** | |
 
 ---
 
@@ -61,8 +72,7 @@ Access the live system:
 前端 Frontend          后端 Backend           数据库 Database
 ─────────────         ──────────────         ─────────────────
 index.html      ───▶  Node.js + Express  ───▶  MySQL
-(纯静态页面)           bichengdong.net/api       clonalreview DB
-(Static HTML)
+GitHub Pages           bichengdong.net/api       clonalreview DB
 ```
 
 - **前端**：纯 HTML + CSS + JS，托管于 GitHub Pages
@@ -93,12 +103,14 @@ Admin configures the API Key in Settings, which is automatically synced to all m
 
 ```
 clonal-paper-filter/
-├── index.html          # 主页面 Main page
+├── index.html           # 主页面 Main page
 ├── data/
-│   ├── stats.json      # 文献总体统计 Overall statistics
-│   ├── high_*.json     # HIGH置信度文献 High-confidence papers
-│   ├── medium_*.json   # MEDIUM置信度文献 Medium-confidence papers
-│   └── all_*.json      # 全部文献 All papers
+│   ├── stats.json       # 文献总体统计 Overall statistics
+│   ├── high_*.json      # HIGH置信度文献 (6,950 papers)
+│   ├── medium_*.json    # MEDIUM置信度文献 (3,595 papers)
+│   ├── low_*.json       # LOW置信度文献 (3,142 papers)
+│   ├── exclude_*.json   # 初步排除文献 (1,486 papers)
+│   └── all_*.json       # 全部文献 All papers (15,173)
 └── .gitignore
 ```
 
@@ -114,8 +126,7 @@ cd clonal-paper-filter
 # 启动本地服务器 Start local server
 python -m http.server 8080
 
-# 访问 Open browser
-# http://localhost:8080
+# 访问 Open browser at http://localhost:8080
 ```
 
 ---
@@ -134,7 +145,7 @@ python -m http.server 8080
 
 ## 联系 | Contact
 
-项目负责人 | Principal Investigator: **毕成东 Bi Chengdong**
+项目负责人 | Principal Investigator: **董必成 Dong Bicheng**
 
 🌐 [bichengdong.net](https://bichengdong.net)
 
