@@ -23,6 +23,7 @@ ClonalReview is a collaborative literature screening platform designed for syste
 | 功能 | Feature |
 |------|---------|
 | 📄 15,173 篇文献分页浏览 | Browse 15,173 papers with pagination |
+| 🔍 全库搜索（跨所有页面） | Full-text search across all 15,173 papers |
 | 🏷️ HIGH / MEDIUM / LOW / EXCLUDE 分级显示 | Tiered display: HIGH / MEDIUM / LOW / EXCLUDE |
 | ✅ 纳入 / ❌ 排除 / ❓ 待定 决策 | Include / Exclude / Maybe decisions |
 | 🤖 AI 辅助筛选（DeepSeek / OpenAI） | AI-assisted screening (DeepSeek / OpenAI) |
