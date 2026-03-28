@@ -467,7 +467,7 @@ const S = {
   criteria: {inclusion:'', exclusion:''},
   aiCfg: {provider:'deepseek', apiKey:'', baseURL:'', model:'deepseek-chat'},
   gistCfg: {id:'', token:''},
-  filter:'all', search:'', page:1, totalPages:1, confType:'high',
+  filter:'all', search:'', page:1, totalPages:1, confType:'all',
   selected: new Set(), did: null,
   totalStats: {total:0, high:0, medium:0}
 };
@@ -606,7 +606,7 @@ document.getElementById('login-btn').onclick = async () => {
   document.getElementById('app').style.display='block';
   btn.disabled=false; btn.textContent='进入评审系统';
   await loadStats();
-  await loadPapers(1,'high');
+  await loadPapers(1,'all');
   refreshNC(); renderSettingsUI();
   setInterval(syncPull,300000);
 };
