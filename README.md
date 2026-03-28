@@ -104,14 +104,15 @@ Admin configures the API Key in Settings, which is automatically synced to all m
 
 ```
 clonal-paper-filter/
-├── index.html           # 主页面 Main page
+├── index.html              # 主页面 Main page
 ├── data/
-│   ├── stats.json       # 文献总体统计 Overall statistics
-│   ├── high_*.json      # HIGH置信度文献 (6,950 papers)
-│   ├── medium_*.json    # MEDIUM置信度文献 (3,595 papers)
-│   ├── low_*.json       # LOW置信度文献 (3,142 papers)
-│   ├── exclude_*.json   # 初步排除文献 (1,486 papers)
-│   └── all_*.json       # 全部文献 All papers (15,173)
+│   ├── stats.json          # 文献总体统计 Overall statistics
+│   ├── search_index.json   # 全库搜索索引 Full-text search index (15,173 papers)
+│   ├── high_*.json         # HIGH置信度文献 (6,950 papers)
+│   ├── medium_*.json       # MEDIUM置信度文献 (3,595 papers)
+│   ├── low_*.json          # LOW置信度文献 (3,142 papers)
+│   ├── exclude_*.json      # 初步排除文献 (1,486 papers)
+│   └── all_*.json          # 全部文献 All papers (15,173)
 └── .gitignore
 ```
 
