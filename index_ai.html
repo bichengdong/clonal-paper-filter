@@ -872,7 +872,7 @@ function closeDp() {
 /* ── AI ── */
 async function callAI(p) {
   if (!S.aiCfg.apiKey) throw new Error('请先在设置中配置 API Key');
-  const url = S.aiCfg.provider==='custom' ? S.aiCfg.baseURL : (S.aiCfg.baseURL||API_URLS[S.aiCfg.provider]);
+  const url = S.aiCfg.provider==='custom' ? S.aiCfg.baseURL : (S.aiCfg.baseURL||AI_URLS[S.aiCfg.provider]);
   const sys = '你是克隆植物生态学系统综述专家，负责文献筛选。\n纳入标准：'+(S.criteria.inclusion||'克隆植物自然生态学研究，2000年后发表')+'\n排除标准：'+(S.criteria.exclusion||'组织培养、细胞克隆、计算机克隆、会议摘要')+'\n返回JSON：{"decision":"included/excluded/maybe","confidence":"high/medium/low","reason":"50字内理由","keywords_found":"检测到的关键词"}';
   const r=await fetch(url,{
     method:'POST',
