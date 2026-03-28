@@ -285,6 +285,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
       <div class="fc active" data-f="all">全部</div>
       <div class="fc" data-f="high">HIGH</div>
       <div class="fc" data-f="medium">MEDIUM</div>
+      <div class="fc" data-f="low">LOW</div>
+      <div class="fc" data-f="exclude">EXCLUDE</div>
       <div class="fsep"></div>
       <div class="fc fi" data-f="included">纳入</div>
       <div class="fc fx" data-f="excluded">排除</div>
@@ -339,6 +341,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
           <div class="sc"><div class="sn gy" id="st-pd">0</div><div class="sl">未决策</div></div>
           <div class="sc"><div class="sn bl" id="st-pg">0%</div><div class="sl">评审进度</div></div>
         </div>
+        <div class="scards" style="margin-top:-4px">
+          <div class="sc"><div class="sn" style="color:#667eea" id="st-high">0</div><div class="sl">HIGH</div></div>
+          <div class="sc"><div class="sn" style="color:#10b981" id="st-medium">0</div><div class="sl">MEDIUM</div></div>
+          <div class="sc"><div class="sn" style="color:#f59e0b" id="st-low">0</div><div class="sl">LOW</div></div>
+          <div class="sc"><div class="sn" style="color:#9ca3af" id="st-exclude">0</div><div class="sl">EXCLUDE</div></div>
+        </div>
         <div style="margin-bottom:18px">
           <div class="sh" style="font-size:14px;margin-bottom:8px">评审员进度</div>
           <table class="rtbl"><thead><tr><th>评审员</th><th>邮箱</th><th>纳入</th><th>排除</th><th>待定</th><th>进度</th></tr></thead>
@@ -346,10 +354,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
         </div>
         <div class="sh" style="font-size:14px;margin-bottom:6px">导出数据</div>
         <div class="exg">
-          <div class="exc" onclick="exportData('included')"><div class="ei">&#x1F4CB;</div><div class="el">纳入文献 CSV</div><div class="ed">用于Meta分析</div></div>
-          <div class="exc" onclick="exportData('excluded')"><div class="ei">&#x1F6AB;</div><div class="el">排除文献 CSV</div><div class="ed">含排除原因</div></div>
-          <div class="exc" onclick="exportData('all')"><div class="ei">&#x1F4E6;</div><div class="el">全部文献 CSV</div><div class="ed">含所有评审员决策</div></div>
-          <div class="exc" onclick="exportData('prisma')"><div class="ei">&#x1F30A;</div><div class="el">PRISMA 数据</div><div class="ed">Meta分析流程报告</div></div>
+          <div class="exc" onclick="exportData('included')"><div class="ei">&#x1F4CB;</div><div class="el">纳入文献 CSV</div><div class="ed">我的纳入决策</div></div>
+          <div class="exc" onclick="exportData('excluded')"><div class="ei">&#x1F6AB;</div><div class="el">排除文献 CSV</div><div class="ed">我的排除决策</div></div>
+          <div class="exc" onclick="exportData('all')"><div class="ei">&#x1F4E6;</div><div class="el">全部文献 CSV</div><div class="ed">我的所有决策</div></div>
+          <div class="exc" onclick="exportData('all-reviewers')"><div class="ei">&#x1F465;</div><div class="el">所有评审员 CSV</div><div class="ed">全体成员决策汇总</div></div>
+          <div class="exc" onclick="exportData('prisma')"><div class="ei">&#x1F30A;</div><div class="el">PRISMA 数据</div><div class="ed">含全体评审员统计</div></div>
         </div>
       </div>
     </div>
@@ -671,7 +680,7 @@ function getFiltered() {
     if (s && !((p.title||'')+' '+(p.authors||'')+' '+(p.journal||'')+' '+(p.wos_id||'')).toLowerCase().includes(s)) return false;
     const f=S.filter;
     if (f==='all')      return true;
-    if (f==='high'||f==='medium') return S.confType===f;
+    if (['high','medium','low','exclude'].includes(f)) return S.confType===f;
     if (f==='included') return dec?.decision==='included';
     if (f==='excluded') return dec?.decision==='excluded';
     if (f==='maybe')    return dec?.decision==='maybe';
@@ -821,9 +830,8 @@ document.querySelectorAll('.fc').forEach(c=>{
   c.onclick=()=>{
     document.querySelectorAll('.fc').forEach(x=>x.classList.remove('active'));
     c.classList.add('active'); S.filter=c.dataset.f;
-    if (S.filter==='medium'&&S.confType!=='medium')      loadPapers(1,'medium');
-    else if (S.filter==='high'&&S.confType!=='high')     loadPapers(1,'high');
-    else if (S.filter==='all'&&S.confType!=='all')       loadPapers(1,'all');
+    const typeFilters = ['high','medium','low','exclude','all'];
+    if (typeFilters.includes(S.filter) && S.confType !== S.filter) loadPapers(1, S.filter);
     else renderPapers();
   };
 });
@@ -939,6 +947,10 @@ function renderStats() {
   document.getElementById('st-pd').textContent=Math.max(0,tot-rev);
   document.getElementById('st-pg').textContent=tot?Math.round(rev/tot*100)+'%':'0%';
   document.getElementById('st-ip').textContent=rev?Math.round(inc/rev*100)+'% 纳入率':'';
+  document.getElementById('st-high').textContent=S.totalStats.high||0;
+  document.getElementById('st-medium').textContent=S.totalStats.medium||0;
+  document.getElementById('st-low').textContent=S.totalStats.low||0;
+  document.getElementById('st-exclude').textContent=S.totalStats.exclude||0;
   document.getElementById('rev-tb').innerHTML=S.reviewers.map(rv=>{
     let ri=0,re=0,rm=0;
     for (const [,rd] of Object.entries(S.allDecisions)) {
@@ -984,32 +996,56 @@ function renderCF() {
 function exportData(type) {
   const esc=s=>s?'"'+String(s).replace(/"/g,'""')+'"':'';
   if (type==='prisma') {
-    let inc=0,exc=0,mb=0;
+    const perRev={};
     for (const [,rd] of Object.entries(S.allDecisions)) {
-      const md=rd[S.user.email]; if(!md) continue;
-      if (md.decision==='included') inc++; else if (md.decision==='excluded') exc++; else if (md.decision==='maybe') mb++;
+      for (const [email,dec] of Object.entries(rd)) {
+        if (!perRev[email]) perRev[email]={inc:0,exc:0,mb:0,name:dec.name||email};
+        if (dec.decision==='included') perRev[email].inc++;
+        else if (dec.decision==='excluded') perRev[email].exc++;
+        else if (dec.decision==='maybe') perRev[email].mb++;
+      }
     }
-    const txt='PRISMA 流程数据 — ClonalReview\n生成时间: '+new Date().toLocaleString()
-      +'\n评审员: '+S.user.name+' <'+S.user.email+'>'
+    const myR=perRev[S.user.email]||{inc:0,exc:0,mb:0};
+    let txt='PRISMA 流程数据 — ClonalReview\n生成时间: '+new Date().toLocaleString()
       +'\n\n数据库检索总量: '+S.totalStats.total
-      +'\nHIGH置信度: '+S.totalStats.high+'\nMEDIUM置信度: '+S.totalStats.medium
-      +'\n\n本人评审结果:\n  纳入: '+inc+'\n  排除: '+exc+'\n  待定: '+mb
-      +'\n  未决策: '+(S.totalStats.total-inc-exc-mb)
-      +'\n\n全体评审员:\n'+S.reviewers.map(r=>' - '+r.name+' <'+r.email+'>').join('\n');
+      +'\n  HIGH置信度: '+S.totalStats.high
+      +'\n  MEDIUM置信度: '+S.totalStats.medium
+      +'\n  LOW置信度: '+(S.totalStats.low||0)
+      +'\n  初步排除: '+(S.totalStats.exclude||0)
+      +'\n\n本人评审结果 ('+S.user.name+'):\n  纳入: '+myR.inc+'\n  排除: '+myR.exc+'\n  待定: '+myR.mb
+      +'\n  未决策: '+(S.totalStats.total-myR.inc-myR.exc-myR.mb)
+      +'\n\n全体评审员结果:\n';
+    for (const [email,r] of Object.entries(perRev)) {
+      txt+=`  ${r.name} <${email}>: 纳入${r.inc} 排除${r.exc} 待定${r.mb}\n`;
+    }
     dlf('prisma_data.txt',txt,'text/plain'); return;
   }
   const rows=[];
   for (const [pid,rd] of Object.entries(S.allDecisions)) {
-    const md=rd[S.user.email]; if(!md) continue;
-    if (type==='included'&&md.decision!=='included') continue;
-    if (type==='excluded'&&md.decision!=='excluded') continue;
-    const p=S.papers.find(x=>x.id===pid)||{id:pid,title:'#'+pid,authors:'',journal:'',year:'',doi:'',wos_id:'',score:0};
-    const allr=Object.entries(rd).map(([e,d])=>(d.name||e)+':'+d.decision).join('; ');
-    rows.push([p.id,esc(p.wos_id||''),esc(p.title),esc(p.authors),esc(p.journal),p.year||'',esc(p.doi||''),p.score||0,md.decision,esc(md.note||''),esc(allr)].join(','));
+    const md=rd[S.user.email];
+    if (type==='included' && md?.decision!=='included') continue;
+    if (type==='excluded' && md?.decision!=='excluded') continue;
+    if (type==='all-reviewers') {
+      const p=S.papers.find(x=>x.id===pid)||{id:pid,title:'#'+pid,authors:'',journal:'',year:'',doi:'',wos_id:'',score:0,decision:''};
+      for (const [email,dec] of Object.entries(rd)) {
+        const rev=S.reviewers.find(r=>r.email===email)||{name:email};
+        rows.push([p.id,esc(p.wos_id||''),esc(p.title),esc(p.authors),esc(p.journal),p.year||'',esc(p.doi||''),p.score||0,esc(p.decision||''),esc(rev.name||email),esc(email),dec.decision,esc(dec.note||'')].join(','));
+      }
+      continue;
+    }
+    if (!md) continue;
+    const p=S.papers.find(x=>x.id===pid)||{id:pid,title:'#'+pid,authors:'',journal:'',year:'',doi:'',wos_id:'',score:0,decision:''};
+    const allr=Object.entries(rd).map(([e,d])=>{const n=S.reviewers.find(r=>r.email===e)?.name||e; return n+':'+d.decision;}).join('; ');
+    rows.push([p.id,esc(p.wos_id||''),esc(p.title),esc(p.authors),esc(p.journal),p.year||'',esc(p.doi||''),p.score||0,esc(p.decision||''),md.decision,esc(md.note||''),esc(allr)].join(','));
   }
-  const hdr='ID,WOS_ID,标题,作者,期刊,年份,DOI,评分,我的决策,备注,所有评审员决策\n';
-  dlf('clonal_'+type+'_'+new Date().toISOString().slice(0,10)+'.csv','\uFEFF'+hdr+rows.join('\n'),'text/csv;charset=utf-8');
-  toast('已导出 '+rows.length+' 篇','success');
+  if (type==='all-reviewers') {
+    const hdr='ID,WOS_ID,标题,作者,期刊,年份,DOI,评分,文献类型,评审员姓名,评审员邮箱,决策,备注\n';
+    dlf('clonal_all_reviewers_'+new Date().toISOString().slice(0,10)+'.csv','\uFEFF'+hdr+rows.join('\n'),'text/csv;charset=utf-8');
+  } else {
+    const hdr='ID,WOS_ID,标题,作者,期刊,年份,DOI,评分,文献类型,我的决策,备注,所有评审员决策\n';
+    dlf('clonal_'+type+'_'+new Date().toISOString().slice(0,10)+'.csv','\uFEFF'+hdr+rows.join('\n'),'text/csv;charset=utf-8');
+  }
+  toast('已导出 '+rows.length+' 行','success');
 }
 document.getElementById('exp-btn').onclick=()=>exportData('included');
 
