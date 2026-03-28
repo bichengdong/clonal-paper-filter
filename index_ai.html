@@ -599,7 +599,7 @@ document.getElementById('login-btn').onclick = async () => {
   await loadStats();
   await loadPapers(1,'high');
   refreshNC(); renderSettingsUI();
-  setInterval(syncPull,30000);
+  setInterval(syncPull,300000);
 };
 document.getElementById('l-pwd').onkeydown=e=>{if(e.key==='Enter')document.getElementById('login-btn').click();};
 document.getElementById('logout-btn').onclick=()=>{
