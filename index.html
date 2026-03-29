@@ -319,9 +319,48 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
       </div>
     </div>
 
-    <div class="page" id="page-included"><div class="lw"><div id="inc-list"></div></div></div>
-    <div class="page" id="page-excluded"><div class="lw"><div id="exc-list"></div></div></div>
-    <div class="page" id="page-maybe"><div class="lw"><div id="mb-list"></div></div></div>
+    <div class="page" id="page-included">
+      <div class="lw">
+        <div class="lh">
+          <input type="checkbox" id="sel-all-inc" onchange="selAllDL(this,'included')">
+          <span class="li" id="linfo-inc"></span>
+          <div class="brow" id="brow-dl" style="display:none">
+            <button class="btn btn-ghost" onclick="exportSelected()">&#x1F4E5; 导出选中</button>
+            <button class="btn btn-d" onclick="bulkDL('excluded')">&#x274C; 改为排除</button>
+            <button class="btn btn-w" onclick="bulkDL('maybe')">&#x2753; 改为待定</button>
+          </div>
+        </div>
+        <div id="inc-list"></div>
+      </div>
+    </div>
+    <div class="page" id="page-excluded">
+      <div class="lw">
+        <div class="lh">
+          <input type="checkbox" id="sel-all-exc" onchange="selAllDL(this,'excluded')">
+          <span class="li" id="linfo-exc"></span>
+          <div class="brow" id="brow-dl-exc" style="display:none">
+            <button class="btn btn-ghost" onclick="exportSelected()">&#x1F4E5; 导出选中</button>
+            <button class="btn btn-s" onclick="bulkDL('included')">&#x2705; 改为纳入</button>
+            <button class="btn btn-w" onclick="bulkDL('maybe')">&#x2753; 改为待定</button>
+          </div>
+        </div>
+        <div id="exc-list"></div>
+      </div>
+    </div>
+    <div class="page" id="page-maybe">
+      <div class="lw">
+        <div class="lh">
+          <input type="checkbox" id="sel-all-mb" onchange="selAllDL(this,'maybe')">
+          <span class="li" id="linfo-mb"></span>
+          <div class="brow" id="brow-dl-mb" style="display:none">
+            <button class="btn btn-ghost" onclick="exportSelected()">&#x1F4E5; 导出选中</button>
+            <button class="btn btn-s" onclick="bulkDL('included')">&#x2705; 改为纳入</button>
+            <button class="btn btn-d" onclick="bulkDL('excluded')">&#x274C; 改为排除</button>
+          </div>
+        </div>
+        <div id="mb-list"></div>
+      </div>
+    </div>
 
     <div class="page" id="page-conflicts">
       <div class="cfs">
@@ -806,7 +845,10 @@ function bindEv() {
 
 function toggleSel(e,id) {
   if (S.selected.has(id)) S.selected.delete(id); else S.selected.add(id);
-  document.getElementById('brow').style.display=S.selected.size>0?'flex':'none';
+  const show=S.selected.size>0?'flex':'none';
+  ['brow','brow-dl','brow-dl-exc','brow-dl-mb'].forEach(bid=>{
+    const b=document.getElementById(bid); if(b) b.style.display=show;
+  });
 }
 
 document.getElementById('sel-all').onchange=function(){
@@ -850,21 +892,74 @@ document.querySelectorAll('.ni[data-pg]').forEach(item=>{
   };
 });
 
+const DL_META = {
+  included: {icon:'📭', label:'纳入', liId:'linfo-inc', browId:'brow-dl',     selId:'sel-all-inc'},
+  excluded: {icon:'🗑️', label:'排除', liId:'linfo-exc', browId:'brow-dl-exc', selId:'sel-all-exc'},
+  maybe:    {icon:'❓', label:'待定', liId:'linfo-mb',  browId:'brow-dl-mb',  selId:'sel-all-mb'}
+};
+
 function renderDL(cid, dec) {
   const entries=[];
   for (const [pid,rd] of Object.entries(S.allDecisions)) {
     const md=rd[S.user.email];
-    if (md?.decision===dec) {
-      entries.push(getPaper(pid));
-    }
+    if (md?.decision===dec) entries.push(getPaper(pid));
   }
-  const icons={included:'📭',excluded:'🗑️',maybe:'❓'}, labels={included:'纳入',excluded:'排除',maybe:'待定'};
+  const m=DL_META[dec]||{icon:'📄',label:dec,liId:'',browId:'',selId:''};
+  if (m.liId) { const el=document.getElementById(m.liId); if(el) el.textContent=entries.length+' 篇'; }
   if (!entries.length) {
-    document.getElementById(cid).innerHTML='<div class="empty"><div class="ei">'+icons[dec]+'</div><p>暂无'+labels[dec]+'文献</p></div>';
+    document.getElementById(cid).innerHTML='<div class="empty"><div class="ei">'+m.icon+'</div><p>暂无'+m.label+'文献</p></div>';
     return;
   }
-  document.getElementById(cid).innerHTML='<p style="font-size:12px;color:#9ca3af;padding:10px 0">'+entries.length+' 篇</p>'+entries.map(renderCard).join('');
+  document.getElementById(cid).innerHTML=entries.map(renderCard).join('');
   bindEv();
+  bindDLSel(m.browId);
+}
+
+function bindDLSel(browId) {
+  const brow=document.getElementById(browId); if(!brow) return;
+  document.querySelectorAll('#'+browId.replace('brow-dl','inc-list, #exc-list, #mb-list').split(',')[0]+' .ccbx, #exc-list .ccbx, #mb-list .ccbx').forEach(()=>{});
+  ['inc-list','exc-list','mb-list'].forEach(lid=>{
+    document.querySelectorAll('#'+lid+' .ccbx').forEach(c=>{
+      c.addEventListener('change', ()=>{
+        const anyChecked = S.selected.size>0;
+        ['brow-dl','brow-dl-exc','brow-dl-mb'].forEach(id=>{
+          const b=document.getElementById(id); if(b) b.style.display=anyChecked?'flex':'none';
+        });
+      });
+    });
+  });
+}
+
+function selAllDL(cb, dec) {
+  const m=DL_META[dec];
+  const listId = dec==='included'?'inc-list': dec==='excluded'?'exc-list':'mb-list';
+  document.querySelectorAll('#'+listId+' .ccbx').forEach(c=>{
+    const id=c.dataset.id;
+    if (cb.checked) { S.selected.add(id); c.checked=true; }
+    else { S.selected.delete(id); c.checked=false; }
+  });
+  const anyChecked=S.selected.size>0;
+  ['brow-dl','brow-dl-exc','brow-dl-mb'].forEach(id=>{
+    const b=document.getElementById(id); if(b) b.style.display=anyChecked?'flex':'none';
+  });
+}
+
+function bulkDL(newDecision) {
+  S.selected.forEach(pid=>{
+    if (!S.allDecisions[pid]) S.allDecisions[pid]={};
+    const prev=S.allDecisions[pid][S.user.email];
+    S.allDecisions[pid][S.user.email]={decision:newDecision, note:prev?.note||'', aiResult:prev?.aiResult||'', time:Date.now(), name:S.user.name};
+  });
+  const n=S.selected.size; S.selected.clear();
+  ['brow-dl','brow-dl-exc','brow-dl-mb'].forEach(id=>{
+    const b=document.getElementById(id); if(b) b.style.display='none';
+  });
+  saveLocal(); refreshNC(); syncPush();
+  toast('已对 '+n+' 篇改为'+{included:'纳入',excluded:'排除',maybe:'待定'}[newDecision],'success');
+  const pg=document.querySelector('.ni.active')?.dataset?.pg;
+  if (pg==='included') renderDL('inc-list','included');
+  else if (pg==='excluded') renderDL('exc-list','excluded');
+  else if (pg==='maybe') renderDL('mb-list','maybe');
 }
 
 function refreshNC() {
