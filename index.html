@@ -307,6 +307,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
             <button class="btn btn-s" onclick="bulk('included')">&#x2705; 纳入</button>
             <button class="btn btn-d" onclick="bulk('excluded')">&#x274C; 排除</button>
             <button class="btn btn-w" onclick="bulk('maybe')">&#x2753; 待定</button>
+            <button class="btn btn-ghost" onclick="exportSelected()">&#x1F4E5; 导出选中</button>
           </div>
         </div>
         <div id="plist"></div>
@@ -354,9 +355,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
         </div>
         <div class="sh" style="font-size:14px;margin-bottom:6px">导出数据</div>
         <div class="exg">
-          <div class="exc" onclick="exportData('included')"><div class="ei">&#x1F4CB;</div><div class="el">纳入文献 CSV</div><div class="ed">我的纳入决策</div></div>
-          <div class="exc" onclick="exportData('excluded')"><div class="ei">&#x1F6AB;</div><div class="el">排除文献 CSV</div><div class="ed">我的排除决策</div></div>
-          <div class="exc" onclick="exportData('all')"><div class="ei">&#x1F4E6;</div><div class="el">全部文献 CSV</div><div class="ed">我的所有决策</div></div>
+          <div class="exc" onclick="exportData('included')"><div class="ei">&#x1F4CB;</div><div class="el">纳入文献 CSV</div><div class="ed">含标题/作者/期刊/DOI/关键词</div></div>
+          <div class="exc" onclick="exportData('excluded')"><div class="ei">&#x1F6AB;</div><div class="el">排除文献 CSV</div><div class="ed">含标题/作者/期刊/DOI/关键词</div></div>
+          <div class="exc" onclick="exportData('maybe')"><div class="ei">&#x2753;</div><div class="el">待定文献 CSV</div><div class="ed">含标题/作者/期刊/DOI/关键词</div></div>
+          <div class="exc" onclick="exportData('all')"><div class="ei">&#x1F4E6;</div><div class="el">全部决策 CSV</div><div class="ed">我的所有决策汇总</div></div>
           <div class="exc" onclick="exportData('all-reviewers')"><div class="ei">&#x1F465;</div><div class="el">所有评审员 CSV</div><div class="ed">全体成员决策汇总</div></div>
           <div class="exc" onclick="exportData('prisma')"><div class="ei">&#x1F30A;</div><div class="el">PRISMA 数据</div><div class="ed">含全体评审员统计</div></div>
         </div>
@@ -712,6 +714,10 @@ function bulk(decision) {
   toast('已对 '+n+' 篇执行批量操作','success');
 }
 
+function getPaper(pid) {
+  return S.papers.find(x=>x.id===pid) || S.searchIndex.find(x=>x.id===pid) || {id:pid,title:'文献 #'+pid,authors:'',journal:'',year:'',doi:'',wos_id:'',keywords:'',score:0,decision:''};
+}
+
 function hasConflict(pid) {
   const d=S.allDecisions[pid]; if(!d) return false;
   const v=Object.values(d).map(x=>x.decision);
@@ -849,8 +855,7 @@ function renderDL(cid, dec) {
   for (const [pid,rd] of Object.entries(S.allDecisions)) {
     const md=rd[S.user.email];
     if (md?.decision===dec) {
-      const p=S.papers.find(x=>x.id===pid)||{id:pid,title:'文献 #'+pid,journal:'',year:'',score:0,abstract:'',wos_id:'',doi:''};
-      entries.push(p);
+      entries.push(getPaper(pid));
     }
   }
   const icons={included:'📭',excluded:'🗑️',maybe:'❓'}, labels={included:'纳入',excluded:'排除',maybe:'待定'};
@@ -1029,8 +1034,7 @@ function renderCF() {
   const cfs=[];
   for (const [pid,rd] of Object.entries(S.allDecisions)) {
     if (!hasConflict(pid)) continue;
-    const p=S.papers.find(x=>x.id===pid)||{id:pid,title:'文献 #'+pid};
-    cfs.push({p,rd});
+    cfs.push({p:getPaper(pid),rd});
   }
   const c=document.getElementById('cf-list');
   if (!cfs.length) { c.innerHTML='<div class="empty"><div class="ei">✨</div><p>暂无冲突</p></div>'; return; }
@@ -1051,8 +1055,33 @@ function renderCF() {
 }
 
 /* ── EXPORT ── */
+const CSV_HDR = 'ID,WOS_ID,标题,作者,期刊,年份,DOI,关键词,评分,文献类型,我的决策,备注,所有评审员决策\n';
+const CSV_HDR_ALL = 'ID,WOS_ID,标题,作者,期刊,年份,DOI,关键词,评分,文献类型,评审员姓名,评审员邮箱,决策,备注\n';
+
+function paperToRow(p, md, rd) {
+  const esc=s=>s?'"'+String(s).replace(/"/g,'""')+'"':'""';
+  const allr=Object.entries(rd||{}).map(([e,d])=>{const n=S.reviewers.find(r=>r.email===e)?.name||e; return n+':'+d.decision;}).join('; ');
+  return [p.id, esc(p.wos_id||''), esc(p.title||''), esc(p.authors||''), esc(p.journal||''),
+    p.year||'', esc(p.doi||''), esc(p.keywords||''), p.score||0, esc(p.decision||''),
+    md?md.decision:'', esc(md?.note||''), esc(allr)].join(',');
+}
+
+function exportSelected() {
+  if (!S.selected.size) { toast('请先勾选文献','info'); return; }
+  const esc=s=>s?'"'+String(s).replace(/"/g,'""')+'"':'""';
+  const rows=[];
+  S.selected.forEach(pid=>{
+    const p=getPaper(pid);
+    const rd=S.allDecisions[pid]||{};
+    const md=rd[S.user.email]||null;
+    rows.push(paperToRow(p, md, rd));
+  });
+  dlf('clonal_selected_'+new Date().toISOString().slice(0,10)+'.csv','\uFEFF'+CSV_HDR+rows.join('\n'),'text/csv;charset=utf-8');
+  toast('已导出选中 '+rows.length+' 篇','success');
+}
+
 function exportData(type) {
-  const esc=s=>s?'"'+String(s).replace(/"/g,'""')+'"':'';
+  const esc=s=>s?'"'+String(s).replace(/"/g,'""')+'"':'""';
   if (type==='prisma') {
     const perRev={};
     for (const [,rd] of Object.entries(S.allDecisions)) {
@@ -1083,25 +1112,24 @@ function exportData(type) {
     const md=rd[S.user.email];
     if (type==='included' && md?.decision!=='included') continue;
     if (type==='excluded' && md?.decision!=='excluded') continue;
+    if (type==='maybe'    && md?.decision!=='maybe')    continue;
+    const p=getPaper(pid);
     if (type==='all-reviewers') {
-      const p=S.papers.find(x=>x.id===pid)||{id:pid,title:'#'+pid,authors:'',journal:'',year:'',doi:'',wos_id:'',score:0,decision:''};
       for (const [email,dec] of Object.entries(rd)) {
         const rev=S.reviewers.find(r=>r.email===email)||{name:email};
-        rows.push([p.id,esc(p.wos_id||''),esc(p.title),esc(p.authors),esc(p.journal),p.year||'',esc(p.doi||''),p.score||0,esc(p.decision||''),esc(rev.name||email),esc(email),dec.decision,esc(dec.note||'')].join(','));
+        rows.push([p.id,esc(p.wos_id||''),esc(p.title||''),esc(p.authors||''),esc(p.journal||''),
+          p.year||'',esc(p.doi||''),esc(p.keywords||''),p.score||0,esc(p.decision||''),
+          esc(rev.name||email),esc(email),dec.decision,esc(dec.note||'')].join(','));
       }
       continue;
     }
     if (!md) continue;
-    const p=S.papers.find(x=>x.id===pid)||{id:pid,title:'#'+pid,authors:'',journal:'',year:'',doi:'',wos_id:'',score:0,decision:''};
-    const allr=Object.entries(rd).map(([e,d])=>{const n=S.reviewers.find(r=>r.email===e)?.name||e; return n+':'+d.decision;}).join('; ');
-    rows.push([p.id,esc(p.wos_id||''),esc(p.title),esc(p.authors),esc(p.journal),p.year||'',esc(p.doi||''),p.score||0,esc(p.decision||''),md.decision,esc(md.note||''),esc(allr)].join(','));
+    rows.push(paperToRow(p, md, rd));
   }
   if (type==='all-reviewers') {
-    const hdr='ID,WOS_ID,标题,作者,期刊,年份,DOI,评分,文献类型,评审员姓名,评审员邮箱,决策,备注\n';
-    dlf('clonal_all_reviewers_'+new Date().toISOString().slice(0,10)+'.csv','\uFEFF'+hdr+rows.join('\n'),'text/csv;charset=utf-8');
+    dlf('clonal_all_reviewers_'+new Date().toISOString().slice(0,10)+'.csv','\uFEFF'+CSV_HDR_ALL+rows.join('\n'),'text/csv;charset=utf-8');
   } else {
-    const hdr='ID,WOS_ID,标题,作者,期刊,年份,DOI,评分,文献类型,我的决策,备注,所有评审员决策\n';
-    dlf('clonal_'+type+'_'+new Date().toISOString().slice(0,10)+'.csv','\uFEFF'+hdr+rows.join('\n'),'text/csv;charset=utf-8');
+    dlf('clonal_'+type+'_'+new Date().toISOString().slice(0,10)+'.csv','\uFEFF'+CSV_HDR+rows.join('\n'),'text/csv;charset=utf-8');
   }
   toast('已导出 '+rows.length+' 行','success');
 }
