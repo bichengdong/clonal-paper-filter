@@ -811,7 +811,7 @@ function renderCard(p) {
   const hasLong=(p.abstract||'').length>200;
   const absHtml='<div class="cabstract-wrap"><div class="cabstract collapsed" id="'+absId+'">'+(p.abstract||'无摘要')+'</div>'+(hasLong?'<span class="toggle-abs" onclick="toggleAbs(event,\''+absId+'\')">展开 ▼</span>':'')+'</div>';
   return '<div class="card'+(sel?' sel':'')+'">'
-    +'<div class="ccb"><input type="checkbox"'+(sel?' checked':'')+' class="ccbx" data-id="'+p.id+'" onclick="toggleSel(event,\''+p.id+'\')"></div>'
+    +'<div class="ccb"><input type="checkbox"'+(sel?' checked':'')+' class="ccbx" data-id="'+p.id+'"></div>'
     +'<div class="cbody">'
       +'<div class="ctr"><div class="ctitle" onclick="openDp(\''+p.id+'\')">'+(p.title||'(无标题)')+'</div>'
       +'<span class="dbadge '+d+'">'+dm[d]+'</span></div>'
@@ -840,7 +840,7 @@ function toggleAbs(e, id) {
 function bindEv() {
   document.querySelectorAll('[data-act]').forEach(b=>b.onclick=e=>{e.stopPropagation();decide(b.dataset.id,b.dataset.act);});
   document.querySelectorAll('[data-ai]').forEach(b=>b.onclick=e=>{e.stopPropagation();aiOne(b.dataset.ai,'card');});
-  document.querySelectorAll('.ccbx').forEach(c=>c.onclick=e=>e.stopPropagation());
+  document.querySelectorAll('.ccbx').forEach(c=>c.onclick=e=>{e.stopPropagation();toggleSel(e,c.dataset.id);});
 }
 
 function toggleSel(e,id) {
