@@ -582,9 +582,8 @@ async function syncPush() {
 
 function applyAdminConfig(cfg) {
   if (!cfg) return;
-  if (cfg.aiCfg) {
-    const { apiKey, ...rest } = cfg.aiCfg;
-    S.aiCfg = {...S.aiCfg, ...rest};
+  if (cfg.aiCfg && cfg.aiCfg.apiKey) {
+    S.aiCfg = {...S.aiCfg, ...cfg.aiCfg};
     localStorage.setItem('cr_ai', JSON.stringify(S.aiCfg));
   }
 }
@@ -687,41 +686,22 @@ function applySearch(keyword) {
     renderPapers(); updatePager(); return;
   }
   S.searchMode=true;
-  const tierFilters=['high','medium','low','exclude','all'];
-  const tier=tierFilters.includes(S.filter)&&S.filter!=='all' ? S.filter : (S.confType!=='all' ? S.confType : null);
+  const typeFilter=['high','medium','low','exclude','all'].includes(S.filter)&&S.filter!=='all' ? S.filter : null;
   S.searchResults=S.searchIndex.filter(p=>{
-    if (tier && p.decision.toLowerCase()!==tier) return false;
+    if (typeFilter && p.decision.toLowerCase()!==typeFilter) return false;
     return ((p.title||'')+' '+(p.authors||'')+' '+(p.journal||'')+' '+(p.wos_id||'')+' '+(p.year||'')).toLowerCase().includes(q);
   });
   S.searchPage=1;
-  renderSearchResults();
+  S.searchTotalPages=Math.max(1,Math.ceil(S.searchResults.length/PAGE_SIZE));
+  renderSearchResults(); updatePager();
 }
 
 function renderSearchResults() {
-  const filtered=S.searchResults.filter(p=>{
-    const dec=myDec(p.id);
-    const f=S.filter;
-    if (f==='all') return true;
-    if (['high','medium','low','exclude'].includes(f)) return (p.decision||'').toLowerCase()===f;
-    if (f==='included') return dec?.decision==='included';
-    if (f==='excluded') return dec?.decision==='excluded';
-    if (f==='maybe') return dec?.decision==='maybe';
-    if (f==='pending') return !dec;
-    if (f==='unmarked') return !S.allDecisions[p.id]||Object.keys(S.allDecisions[p.id]).length===0;
-    if (f==='conflict') return hasConflict(p.id);
-    if (f==='ai') return !!dec?.aiResult;
-    return true;
-  });
-  const totalPages=Math.max(1,Math.ceil(filtered.length/PAGE_SIZE));
-  if (S.searchPage>totalPages) S.searchPage=totalPages;
   const start=(S.searchPage-1)*PAGE_SIZE;
-  const slice=filtered.slice(start,start+PAGE_SIZE);
+  const slice=S.searchResults.slice(start,start+PAGE_SIZE);
   S.papers=slice;
-  document.getElementById('linfo').textContent=filtered.length+' 篇（搜索结果）';
-  document.getElementById('fcnt').textContent=filtered.length+' 篇';
-  document.getElementById('pgri').textContent='第 '+S.searchPage+' / '+totalPages+' 页';
-  document.getElementById('prev-btn').disabled=S.searchPage<=1;
-  document.getElementById('next-btn').disabled=S.searchPage>=totalPages;
+  document.getElementById('linfo').textContent=S.searchResults.length+' 篇（搜索结果）';
+  document.getElementById('fcnt').textContent=S.searchResults.length+' 篇';
   if (!slice.length) {
     document.getElementById('plist').innerHTML='<div class="empty"><div class="ei">🔍</div><p>没有符合条件的文献</p></div>';
     return;
@@ -888,11 +868,11 @@ function updatePager() {
   document.getElementById('next-btn').disabled=pg>=tot;
 }
 document.getElementById('prev-btn').onclick=()=>{
-  if (S.searchMode) { S.searchPage--; renderSearchResults(); }
+  if (S.searchMode) { S.searchPage--; renderSearchResults(); updatePager(); }
   else loadPapers(S.page-1);
 };
 document.getElementById('next-btn').onclick=()=>{
-  if (S.searchMode) { S.searchPage++; renderSearchResults(); }
+  if (S.searchMode) { S.searchPage++; renderSearchResults(); updatePager(); }
   else loadPapers(S.page+1);
 };
 
@@ -1005,14 +985,9 @@ document.querySelectorAll('.fc').forEach(c=>{
     document.querySelectorAll('.fc').forEach(x=>x.classList.remove('active'));
     c.classList.add('active'); S.filter=c.dataset.f;
     const typeFilters = ['high','medium','low','exclude','all'];
-    const decisionFilters = ['included','excluded','maybe','pending','unmarked','conflict','ai'];
     if (typeFilters.includes(S.filter)) {
       if (S.search.trim()) { applySearch(S.search); }
       else if (S.confType !== S.filter) loadPapers(1, S.filter);
-      else renderPapers();
-    } else if (decisionFilters.includes(S.filter)) {
-      if (S.searchMode) applySearch(S.search);
-      else if (S.confType !== 'all') loadPapers(1, S.confType);
       else renderPapers();
     } else {
       if (S.searchMode) renderSearchResults();
@@ -1068,27 +1043,21 @@ function closeDp() {
 
 /* ── AI ── */
 async function callAI(p) {
+  if (!S.aiCfg.apiKey) throw new Error('请先在设置中配置 API Key');
+  const url = S.aiCfg.provider==='custom' ? S.aiCfg.baseURL : (S.aiCfg.baseURL||AI_URLS[S.aiCfg.provider]);
   const sys = '你是克隆植物生态学系统综述专家，负责文献筛选。\n纳入标准：'+(S.criteria.inclusion||'克隆植物自然生态学研究，2000年后发表')+'\n排除标准：'+(S.criteria.exclusion||'组织培养、细胞克隆、计算机克隆、会议摘要')+'\n返回JSON：{"decision":"included/excluded/maybe","confidence":"high/medium/low","reason":"50字内理由","keywords_found":"检测到的关键词"}';
-  const prompt = '标题：'+p.title+'\n作者：'+(p.authors||'')+'\n期刊：'+(p.journal||'')+'\n摘要：'+(p.abstract||'');
-  const r = await fetch(SERVER_API+'/analyze', {
+  const r=await fetch(url,{
     method:'POST',
-    headers:{'Content-Type':'application/json','X-Auth-Key':getAuthKey()},
-    body: JSON.stringify({
-      provider: S.aiCfg.provider,
-      model: S.aiCfg.model,
-      baseURL: S.aiCfg.baseURL || AI_URLS[S.aiCfg.provider],
-      sys: sys,
-      prompt: prompt,
-      paper: p
-    })
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+S.aiCfg.apiKey},
+    body:JSON.stringify({model:S.aiCfg.model,messages:[{role:'system',content:sys},{role:'user',content:'标题：'+p.title+'\n作者：'+(p.authors||'')+'\n期刊：'+(p.journal||'')+'\n摘要：'+(p.abstract||'')}],temperature:0.2,max_tokens:400})
   });
-  const data = await r.json();
-  if (!r.ok) throw new Error(data?.error || 'API '+r.status);
-  return data.result;
+  if (!r.ok) { const e=await r.json().catch(()=>({})); throw new Error(e?.error?.message||'API '+r.status); }
+  return (await r.json()).choices[0].message.content;
 }
 
 async function aiOne(pid, src) {
-  const p=getPaper(pid); if(!p) return;
+  const p=S.papers.find(x=>x.id===pid); if(!p) return;
+  if (!S.aiCfg.apiKey) { toast('请先在⚙️设置中配置 API Key','error'); return; }
   if (src==='dp') { const e=document.getElementById('dp-air'); e.textContent='🤖 分析中…'; e.style.color='#667eea'; e.style.fontStyle='normal'; }
   else toast('AI 分析中…','info');
   try {
@@ -1110,6 +1079,7 @@ async function aiOne(pid, src) {
 }
 
 document.getElementById('ai-batch').onclick=async()=>{
+  if (!S.aiCfg.apiKey) { toast('请先配置 API Key','error'); return; }
   const pend=getFiltered().filter(p=>!myDec(p.id)).slice(0,5);
   if (!pend.length) { toast('没有未决策文献','info'); return; }
   toast('批量分析 '+pend.length+' 篇…','info');
