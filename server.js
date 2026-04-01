@@ -12,7 +12,7 @@ const ADMIN_PWD   = 'admin2024';
 
 // ── 简单认证中间件：验证 X-Auth-Key ──
 function authMiddleware(req, res, next) {
-  const key = req.headers['x-authkey'];
+  const key = req.headers['x-auth-key'];
   if (key === DEFAULT_PWD || key === ADMIN_PWD) {
     req.isAdmin = (key === ADMIN_PWD);
     return next();
