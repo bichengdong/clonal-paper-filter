@@ -1044,22 +1044,27 @@ function closeDp() {
 
 /* ── AI ── */
 async function callAI(p) {
-  if (!S.aiCfg.provider) throw new Error('请先在设置中配置 AI');
   const sys = '你是克隆植物生态学系统综述专家，负责文献筛选。\n纳入标准：'+(S.criteria.inclusion||'克隆植物自然生态学研究，2000年后发表')+'\n排除标准：'+(S.criteria.exclusion||'组织培养、细胞克隆、计算机克隆、会议摘要')+'\n返回JSON：{"decision":"included/excluded/maybe","confidence":"high/medium/low","reason":"50字内理由","keywords_found":"检测到的关键词"}';
-  const prompt = '标题：'+(p.title||'')+'\n作者：'+(p.authors||'')+'\n期刊：'+(p.journal||'')+'\n摘要：'+(p.abstract||'');
-  const r = await apiCall('POST', '/analyze', {
-    provider: S.aiCfg.provider,
-    model: S.aiCfg.model,
-    baseURL: S.aiCfg.baseURL,
-    prompt: sys + '\n\n' + prompt,
-    paper: p
-  }, 60000);
-  return r.result;
+  const prompt = '标题：'+p.title+'\n作者：'+(p.authors||'')+'\n期刊：'+(p.journal||'')+'\n摘要：'+(p.abstract||'');
+  const r = await fetch(SERVER_API+'/api/analyze', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-Auth-Key':getAuthKey()},
+    body: JSON.stringify({
+      provider: S.aiCfg.provider,
+      model: S.aiCfg.model,
+      baseURL: S.aiCfg.baseURL || AI_URLS[S.aiCfg.provider],
+      sys: sys,
+      prompt: prompt,
+      paper: p
+    })
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data?.error || 'API '+r.status);
+  return data.result;
 }
 
 async function aiOne(pid, src) {
   const p=getPaper(pid); if(!p) return;
-  if (!S.aiCfg.provider) { toast('请先在⚙️设置中配置 AI','error'); return; }
   if (src==='dp') { const e=document.getElementById('dp-air'); e.textContent='🤖 分析中…'; e.style.color='#667eea'; e.style.fontStyle='normal'; }
   else toast('AI 分析中…','info');
   try {
@@ -1081,7 +1086,6 @@ async function aiOne(pid, src) {
 }
 
 document.getElementById('ai-batch').onclick=async()=>{
-  if (!S.aiCfg.provider) { toast('请先配置 AI','error'); return; }
   const pend=getFiltered().filter(p=>!myDec(p.id)).slice(0,5);
   if (!pend.length) { toast('没有未决策文献','info'); return; }
   toast('批量分析 '+pend.length+' 篇…','info');
@@ -1242,10 +1246,10 @@ function dlf(name,content,type) {
 
 /* ── SETTINGS ── */
 function renderSettingsUI() {
-  document.getElementById('set-prov').value=S.aiCfg.provider||'deepseek';
-  document.getElementById('set-akey').value=S.aiCfg.apiKey?'••••••••':'';
-  document.getElementById('set-abase').value=S.aiCfg.baseURL||'';
-  document.getElementById('set-mdl').value=S.aiCfg.model||'';
+  document.getElementById('set-prov').value=S.aiCfg.provider;
+  document.getElementById('set-akey').value=S.aiCfg.apiKey;
+  document.getElementById('set-abase').value=S.aiCfg.baseURL;
+  document.getElementById('set-mdl').value=S.aiCfg.model;
   document.getElementById('set-inc').value=S.criteria.inclusion;
   document.getElementById('set-exc').value=S.criteria.exclusion;
   document.getElementById('cust-url').style.display=S.aiCfg.provider==='custom'?'block':'none';
@@ -1286,10 +1290,9 @@ document.getElementById('test-api-btn').onclick=async()=>{
 
 document.getElementById('save-ai').onclick=async ()=>{
   S.aiCfg.provider=document.getElementById('set-prov').value;
+  S.aiCfg.apiKey=document.getElementById('set-akey').value.trim();
   S.aiCfg.baseURL=document.getElementById('set-abase').value.trim();
   S.aiCfg.model=document.getElementById('set-mdl').value;
-  const apiKeyVal=document.getElementById('set-akey').value.trim();
-  if (apiKeyVal) S.aiCfg.apiKey=apiKeyVal;
   localStorage.setItem('cr_ai',JSON.stringify(S.aiCfg));
   updAiDot();
   if (S.user.isAdmin) {
