@@ -687,22 +687,41 @@ function applySearch(keyword) {
     renderPapers(); updatePager(); return;
   }
   S.searchMode=true;
-  const typeFilter=['high','medium','low','exclude','all'].includes(S.filter)&&S.filter!=='all' ? S.filter : null;
+  const tierFilters=['high','medium','low','exclude','all'];
+  const tier=tierFilters.includes(S.filter)&&S.filter!=='all' ? S.filter : (S.confType!=='all' ? S.confType : null);
   S.searchResults=S.searchIndex.filter(p=>{
-    if (typeFilter && p.decision.toLowerCase()!==typeFilter) return false;
+    if (tier && p.decision.toLowerCase()!==tier) return false;
     return ((p.title||'')+' '+(p.authors||'')+' '+(p.journal||'')+' '+(p.wos_id||'')+' '+(p.year||'')).toLowerCase().includes(q);
   });
   S.searchPage=1;
-  S.searchTotalPages=Math.max(1,Math.ceil(S.searchResults.length/PAGE_SIZE));
-  renderSearchResults(); updatePager();
+  renderSearchResults();
 }
 
 function renderSearchResults() {
+  const filtered=S.searchResults.filter(p=>{
+    const dec=myDec(p.id);
+    const f=S.filter;
+    if (f==='all') return true;
+    if (['high','medium','low','exclude'].includes(f)) return (p.decision||'').toLowerCase()===f;
+    if (f==='included') return dec?.decision==='included';
+    if (f==='excluded') return dec?.decision==='excluded';
+    if (f==='maybe') return dec?.decision==='maybe';
+    if (f==='pending') return !dec;
+    if (f==='unmarked') return !S.allDecisions[p.id]||Object.keys(S.allDecisions[p.id]).length===0;
+    if (f==='conflict') return hasConflict(p.id);
+    if (f==='ai') return !!dec?.aiResult;
+    return true;
+  });
+  const totalPages=Math.max(1,Math.ceil(filtered.length/PAGE_SIZE));
+  if (S.searchPage>totalPages) S.searchPage=totalPages;
   const start=(S.searchPage-1)*PAGE_SIZE;
-  const slice=S.searchResults.slice(start,start+PAGE_SIZE);
+  const slice=filtered.slice(start,start+PAGE_SIZE);
   S.papers=slice;
-  document.getElementById('linfo').textContent=S.searchResults.length+' 篇（搜索结果）';
-  document.getElementById('fcnt').textContent=S.searchResults.length+' 篇';
+  document.getElementById('linfo').textContent=filtered.length+' 篇（搜索结果）';
+  document.getElementById('fcnt').textContent=filtered.length+' 篇';
+  document.getElementById('pgri').textContent='第 '+S.searchPage+' / '+totalPages+' 页';
+  document.getElementById('prev-btn').disabled=S.searchPage<=1;
+  document.getElementById('next-btn').disabled=S.searchPage>=totalPages;
   if (!slice.length) {
     document.getElementById('plist').innerHTML='<div class="empty"><div class="ei">🔍</div><p>没有符合条件的文献</p></div>';
     return;
@@ -869,11 +888,11 @@ function updatePager() {
   document.getElementById('next-btn').disabled=pg>=tot;
 }
 document.getElementById('prev-btn').onclick=()=>{
-  if (S.searchMode) { S.searchPage--; renderSearchResults(); updatePager(); }
+  if (S.searchMode) { S.searchPage--; renderSearchResults(); }
   else loadPapers(S.page-1);
 };
 document.getElementById('next-btn').onclick=()=>{
-  if (S.searchMode) { S.searchPage++; renderSearchResults(); updatePager(); }
+  if (S.searchMode) { S.searchPage++; renderSearchResults(); }
   else loadPapers(S.page+1);
 };
 
@@ -986,9 +1005,14 @@ document.querySelectorAll('.fc').forEach(c=>{
     document.querySelectorAll('.fc').forEach(x=>x.classList.remove('active'));
     c.classList.add('active'); S.filter=c.dataset.f;
     const typeFilters = ['high','medium','low','exclude','all'];
+    const decisionFilters = ['included','excluded','maybe','pending','unmarked','conflict','ai'];
     if (typeFilters.includes(S.filter)) {
       if (S.search.trim()) { applySearch(S.search); }
       else if (S.confType !== S.filter) loadPapers(1, S.filter);
+      else renderPapers();
+    } else if (decisionFilters.includes(S.filter)) {
+      if (S.searchMode) applySearch(S.search);
+      else if (S.confType !== 'all') loadPapers(1, S.confType);
       else renderPapers();
     } else {
       if (S.searchMode) renderSearchResults();
